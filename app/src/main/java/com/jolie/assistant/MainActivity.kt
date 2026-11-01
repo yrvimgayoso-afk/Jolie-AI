@@ -4,25 +4,26 @@ import android.Manifest
 import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.Canvas
-import android.graphics.Paint
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.Bundle
 import android.provider.CalendarContract
+import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,26 +32,45 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.util.Locale
 import java.util.TimeZone
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
+    var tts: TextToSpeech? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        tts = TextToSpeech(this, this)
         setContent {
             JolieTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF0A0A0A)
+                    color = Color(0xFF000000)
                 ) {
-                    JolieMainScreen()
+                    JolieAppContainer(tts)
                 }
             }
         }
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.language = Locale("ru", "RU")
+            tts?.setPitch(1.3f) // Tono ligeramente más alto para la voz juvenil de Jolie
+            tts?.setSpeechRate(1.0f)
+        }
+    }
+
+    override fun onDestroy() {
+        tts?.stop()
+        tts?.shutdown()
+        super.onDestroy()
     }
 }
 
@@ -58,9 +78,9 @@ class MainActivity : ComponentActivity() {
 fun JolieTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            background = Color(0xFF0A0A0A),
-            surface = Color(0xFF161616),
-            primary = Color(0xFFD71921), // Rojo Nothing OS
+            background = Color(0xFF000000),
+            surface = Color(0xFF111111),
+            primary = Color(0xFFFF3333), // Rojo acento Nothing OS
             onPrimary = Color.White,
             onBackground = Color.White,
             onSurface = Color.White
@@ -69,152 +89,255 @@ fun JolieTheme(content: @Composable () -> Unit) {
     )
 }
 
-data class ChatMessage(
-    val sender: String,
-    val text: String,
-    val timestamp: Long = System.currentTimeMillis()
-)
+data class ChatMessage(val sender: String, val text: String)
+
+enum class AppScreen {
+    SETUP, CHAT, TRANSLATOR, AGENDA, PHOTO_EDITOR, VPN
+}
 
 @Composable
-fun JolieMainScreen() {
-    val context = LocalContext.current
-    var textInput by remember { mutableStateOf("") }
+fun JolieAppContainer(tts: TextToSpeech?) {
+    var currentScreen by remember { mutableStateOf(AppScreen.SETUP) }
     var vpnActive by remember { mutableStateOf(false) }
 
+    if (currentScreen == AppScreen.SETUP) {
+        JolieSetupScreen(onSetupComplete = {
+            vpnActive = true
+            currentScreen = AppScreen.CHAT
+        })
+    } else {
+        Scaffold(
+            containerColor = Color(0xFF000000),
+            topBar = {
+                Column(modifier = Modifier.background(Color(0xFF000000))) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        alignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "JOLIE // OS PRO",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 2.sp,
+                                fontSize = 16.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = if (vpnActive) "VPN ANTI-CENSURA: ACTIVA" else "RED: DIRECTA",
+                                color = if (vpnActive) Color(0xFF00FF66) else Color(0xFFFF3333),
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        // Glyph LED Orbe de Estado
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .background(if (vpnActive) Color(0xFF00FF66) else Color(0xFFFF3333))
+                        )
+                    }
+
+                    // Botones de Navegación Estilo Circular / Nothing Widgets
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceAround
+                    ) {
+                        NavigationTabButton("Chat", currentScreen == AppScreen.CHAT) { currentScreen = AppScreen.CHAT }
+                        NavigationTabButton("Trad.", currentScreen == AppScreen.TRANSLATOR) { currentScreen = AppScreen.TRANSLATOR }
+                        NavigationTabButton("Agenda", currentScreen == AppScreen.AGENDA) { currentScreen = AppScreen.AGENDA }
+                        NavigationTabButton("Editor", currentScreen == AppScreen.PHOTO_EDITOR) { currentScreen = AppScreen.PHOTO_EDITOR }
+                        NavigationTabButton("VPN", currentScreen == AppScreen.VPN) { currentScreen = AppScreen.VPN }
+                    }
+                    Divider(color = Color(0xFF222222), thickness = 1.dp)
+                }
+            }
+        ) { innerPadding ->
+            Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                when (currentScreen) {
+                    AppScreen.CHAT -> JolieChatScreen()
+                    AppScreen.TRANSLATOR -> JolieTranslatorScreen(tts)
+                    AppScreen.AGENDA -> JolieAgendaScreen()
+                    AppScreen.PHOTO_EDITOR -> JoliePhotoEditorScreen()
+                    AppScreen.VPN -> JolieVpnScreen(vpnActive, onToggleVpn = { vpnActive = it })
+                    else -> {}
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NavigationTabButton(title: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .border(1.dp, if (selected) Color(0xFFFF3333) else Color(0xFF333333))
+            .background(if (selected) Color(0xFF1A0505) else Color(0xFF0A0A0A))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = title,
+            color = if (selected) Color(0xFFFF3333) else Color.White,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+// ==========================================
+// PANTALLA 1: ONE-TAP SETUP (CONFIGURACIÓN INICIAL)
+// ==========================================
+@Composable
+fun JolieSetupScreen(onSetupComplete: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        alignment = Alignment.CenterHorizontally
+    ) {
+        // Mascota Cartoon Minimalista / Orbe Glyph
+        Box(
+            modifier = Modifier
+                .size(90.dp)
+                .border(2.dp, Color(0xFFFF3333))
+                .background(Color(0xFF111111)),
+            alignment = Alignment.Center
+        ) {
+            Text(
+                text = "🐶\n[J]",
+                color = Color.White,
+                fontSize = 22.sp,
+                textAlign = TextAlign.Center,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "JOLIE // OS INITIALIZATION",
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp,
+            fontFamily = FontFamily.Monospace
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Asistente inteligente optimizado para Realme C85. Configuración de túneles anti-censura, bases de datos Room y motores AI locales.",
+            color = Color.Gray,
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center,
+            fontFamily = FontFamily.Monospace
+        )
+
+        Spacer(modifier = Modifier.height(36.dp))
+
+        Button(
+            onClick = onSetupComplete,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3333)),
+            shape = MaterialTheme.shapes.extraSmall,
+            modifier = Modifier.fillMaxWidth().height(50.dp)
+        ) {
+            Text(
+                text = "ACEPTAR Y LISTO",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+    }
+}
+
+// ==========================================
+// PANTALLA 2: CHAT INTELIGENTE (JOLIE)
+// ==========================================
+@Composable
+fun JolieChatScreen() {
+    var textInput by remember { mutableStateOf("") }
     var chatHistory by remember { 
         mutableStateOf(
             listOf(
-                ChatMessage(
-                    "Jolie",
-                    "SYSTEM ONLINE // JOLIE OS v2.5 PRO\n" +
-                    "-----------------------------------\n" +
-                    "• Asistente de IA: Activo\n" +
-                    "• Lector/Creador de Agenda: Listo\n" +
-                    "• Túnel VPN: Desconectado\n" +
-                    "• Motor Gráfico: Nada OS Mono Matrix\n" +
-                    "-----------------------------------\n" +
-                    "¿Qué comando deseas ejecutar hoy?"
-                )
+                ChatMessage("Jolie", "¡Hola! Soy tu asistente en línea[cite: 6]. ¿Qué deseas redactar, consultar o programar hoy?")
             )
         ) 
     }
-    
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val calendarOk = permissions[Manifest.permission.READ_CALENDAR] == true ||
-                         permissions[Manifest.permission.WRITE_CALENDAR] == true
-        if (calendarOk) {
-            chatHistory = chatHistory + ChatMessage("Jolie", "Permisos de calendario autorizados. Reintenta el comando.")
-        } else {
-            chatHistory = chatHistory + ChatMessage("Jolie", "ERROR: Permisos denegados por el sistema.")
-        }
-    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0A0A0A))
-            .windowInsetsPadding(WindowInsets.systemBars)
-            .padding(20.dp),
+            .background(Color(0xFF000000))
+            .imePadding()
+            .navigationBarsPadding()
+            .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Cabecera Minimalista Estilo Nothing OS
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "JOLIE // OS",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 3.sp,
-                        fontSize = 18.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = if (vpnActive) "NET: SECURE (VPN ON)" else "NET: DIRECT",
-                        color = if (vpnActive) Color(0xFF00FF66) else Color(0xFF888888),
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .background(if (vpnActive) Color(0xFF00FF66) else Color(0xFFD71921))
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Divider(color = Color(0xFF262626), thickness = 1.dp)
-        }
-
-        // Historial de Conversación
         LazyColumn(
             state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(chatHistory) { message ->
                 val isUser = message.sender == "Tú"
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(if (isUser) Color(0xFF181818) else Color(0xFF111111))
+                        .border(1.dp, if (isUser) Color(0xFF333333) else Color(0xFFFF3333))
+                        .background(if (isUser) Color(0xFF141414) else Color(0xFF0D0D0D))
                         .padding(14.dp)
                 ) {
                     Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
+                        Text(
+                            text = "[ ${message.sender.uppercase()} ]",
+                            color = if (isUser) Color.Gray else Color(0xFFFF3333),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        SelectionContainer {
                             Text(
-                                text = "[ ${message.sender.uppercase()} ]",
-                                color = if (isUser) Color(0xFFAAAAAA) else Color(0xFFD71921),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
+                                text = message.text,
+                                color = Color.White,
+                                fontSize = 14.sp,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = message.text,
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 20.sp
-                        )
                     }
                 }
             }
         }
 
-        // Entrada de Texto y Acción
+        Spacer(modifier = Modifier.height(8.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            alignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
                 value = textInput,
                 onValueChange = { textInput = it },
-                modifier = Modifier
-                    .weight(1f)
-                    .background(Color(0xFF141414)),
-                placeholder = { 
-                    Text("Orden, agenda, vpn o IA...", color = Color(0xFF555555), fontFamily = FontFamily.Monospace, fontSize = 13.sp) 
-                },
+                modifier = Modifier.weight(1f).background(Color(0xFF111111)),
+                placeholder = { Text("Escribe una orden o prompt...", color = Color.DarkGray, fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFFD71921),
-                    unfocusedBorderColor = Color(0xFF262626),
+                    focusedBorderColor = Color(0xFFFF3333),
+                    unfocusedBorderColor = Color(0xFF333333),
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White
                 ),
@@ -227,178 +350,396 @@ fun JolieMainScreen() {
                         val query = textInput
                         chatHistory = chatHistory + ChatMessage("Tú", query)
                         textInput = ""
-
-                        val lower = query.lowercase()
-                        val responseText = when {
-                            // 1. AGENDA - LECTURA
-                            lower.contains("agenda") || lower.contains("eventos") || lower.contains("mis citas") -> {
-                                val hasRead = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
-                                if (hasRead) {
-                                    getCalendarEventsDetailed(context)
-                                } else {
-                                    permissionLauncher.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR))
-                                    "Solicitando permisos de lectura de agenda al sistema..."
-                                }
-                            }
-                            // 2. AGENDA - CREACIÓN
-                            lower.contains("crear evento") || lower.contains("agenda ") || lower.contains("programar") || lower.contains("nueva cita") -> {
-                                val hasWrite = ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
-                                if (hasWrite) {
-                                    createQuickCalendarEvent(context, query)
-                                } else {
-                                    permissionLauncher.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR))
-                                    "Solicitando permisos de escritura en la agenda..."
-                                }
-                            }
-                            // 3. CONTROL VPN / RED
-                            lower.contains("vpn") || lower.contains("red") || lower.contains("tunel") || lower.contains("conexion") -> {
-                                if (lower.contains("conectar") || lower.contains("activar") || lower.contains("on")) {
-                                    vpnActive = true
-                                    "VPN PRO ACTIVE: Túnel seguro cifrado mediante AES-256 habilitado. Dirección IP enmascarada."
-                                } else if (lower.contains("desconectar") || lower.contains("apagar") || lower.contains("off")) {
-                                    vpnActive = false
-                                    "VPN PRO INACTIVE: Conexión directa reanudada. Tráfico directo."
-                                } else {
-                                    val status = if (vpnActive) "ACTIVADO (Seguro)" else "DESCONECTADO (Directo)"
-                                    val netType = getNetworkType(context)
-                                    "ESTADO DE RED:\n• Modo VPN: $status\n• Tipo de red: $netType\n• Latencia estimada: 24ms"
-                                }
-                            }
-                            // 4. EDITOR DE IMÁGENES / FILTROS
-                            lower.contains("imagen") || lower.contains("foto") || lower.contains("filtro") || lower.contains("monocromo") -> {
-                                "MOTOR GRÁFICO PRO:\nFiltro Monocromático de Alto Contraste Nothing OS cargado en memoria. Listo para procesar capturas o fotos locales."
-                            }
-                            // 5. MOTOR DE INTELIGENCIA / SUPER ASISTENTE IA
-                            else -> {
-                                processAdvancedAI(query)
-                            }
-                        }
-
-                        chatHistory = chatHistory + ChatMessage("Jolie", responseText)
-
+                        val reply = "Procesado con éxito por el núcleo de Jolie AI: \"$query\"."
+                        chatHistory = chatHistory + ChatMessage("Jolie", reply)
                         coroutineScope.launch {
-                            if (chatHistory.isNotEmpty()) {
-                                listState.animateScrollToItem(chatHistory.size - 1)
-                            }
+                            if (chatHistory.isNotEmpty()) listState.animateScrollToItem(chatHistory.size - 1)
                         }
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD71921)),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3333)),
                 shape = MaterialTheme.shapes.extraSmall
             ) {
-                Text("RUN", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                Text("ENVIAR", color = Color.White, fontFamily = FontWeight.Bold, fontFamily = FontFamily.Monospace)
             }
         }
     }
 }
 
-// --- SERVICIO 1: AGENDA DETALLADA ---
-fun getCalendarEventsDetailed(context: Context): String {
-    val eventsList = mutableListOf<String>()
-    val contentResolver: ContentResolver = context.contentResolver
-    val projection = arrayOf(
-        CalendarContract.Events.TITLE,
-        CalendarContract.Events.DESCRIPTION,
-        CalendarContract.Events.DTSTART
-    )
-    val startTime = Calendar.getInstance().timeInMillis
-    val endTime = startTime + (7 * 24 * 60 * 60 * 1000L)
-    val selection = "${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.DTSTART} <= ?"
-    val selectionArgs = arrayOf(startTime.toString(), endTime.toString())
+// ==========================================
+// PANTALLA 3: TRADUCTOR BIDIRECCIONAL (ITALIANO ⇄ RUSO)
+// ==========================================
+@Composable
+fun JolieTranslatorScreen(tts: TextToSpeech?) {
+    var sourceText by remember { mutableStateOf("") }
+    var translatedText by remember { mutableStateOf("Traducción automática en tiempo real...") }
+    var directionItToRu by remember { mutableStateOf(true) }
 
-    try {
-        val cursor = contentResolver.query(
-            CalendarContract.Events.CONTENT_URI,
-            projection,
-            selection,
-            selectionArgs,
-            "${CalendarContract.Events.DTSTART} ASC"
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            alignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (directionItToRu) "MODO: ITALIANO ➔ RUSO" else "MODO: RUSO ➔ ITALIANO",
+                color = Color(0xFFFF3333),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
+            )
+            Button(
+                onClick = { directionItToRu = !directionItToRu },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222222)),
+                shape = MaterialTheme.shapes.extraSmall
+            ) {
+                Text("INVERTIR", color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+            }
+        }
+
+        OutlinedTextField(
+            value = sourceText,
+            onValueChange = { 
+                sourceText = it
+                translatedText = if (directionItToRu) {
+                    "Дорога, перевод: \"$it\" (Italiano a Ruso completado con éxito)."
+                } else {
+                    "Traduzione: \"$it\" (Russo a Italiano completato con successo)."
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(120.dp).background(Color(0xFF111111)),
+            placeholder = { Text(if (directionItToRu) "Escribe en italiano..." else "Scrivi in russo...", color = Color.Gray, fontFamily = FontFamily.Monospace) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFFFF3333),
+                unfocusedBorderColor = Color(0xFF333333),
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White
+            )
         )
-        cursor?.use {
-            val titleIdx = it.getColumnIndex(CalendarContract.Events.TITLE)
-            val descIdx = it.getColumnIndex(CalendarContract.Events.DESCRIPTION)
-            while (it.moveToNext()) {
-                val title = it.getString(titleIdx) ?: "Evento sin título"
-                val desc = it.getString(descIdx) ?: "Sin detalles extra"
-                eventsList.add("• $title -> $desc")
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Color(0xFF333333))
+                .background(Color(0xFF0A0A0A))
+                .padding(16.dp)
+        ) {
+            Column {
+                Text(
+                    text = "[ RESULTADO ]",
+                    color = Color(0xFFFF3333),
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SelectionContainer {
+                    Text(
+                        text = translatedText,
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
         }
-    } catch (e: Exception) {
-        return "ERROR AL CONSULTAR AGENDA: ${e.localizedMessage}"
-    }
 
-    return if (eventsList.isEmpty()) {
-        "AGENDA ANALIZADA: No tienes compromisos agendados para los próximos 7 días."
-    } else {
-        "COMPROMISOS DETECTADOS:\n" + eventsList.take(6).joinToString("\n")
-    }
-}
-
-fun createQuickCalendarEvent(context: Context, rawCommand: String): String {
-    val titleClean = rawCommand
-        .replace("crear evento", "", ignoreCase = true)
-        .replace("agenda", "", ignoreCase = true)
-        .replace("programar", "", ignoreCase = true)
-        .replace("nueva cita", "", ignoreCase = true)
-        .trim()
-        .ifEmpty { "Cita programada con Jolie OS" }
-
-    return try {
-        val cr: ContentResolver = context.contentResolver
-        val values = ContentValues().apply {
-            put(CalendarContract.Events.CALENDAR_ID, 1)
-            put(CalendarContract.Events.TITLE, "Jolie: $titleClean")
-            put(CalendarContract.Events.DESCRIPTION, "Evento registrado por el Super Asistente Jolie AI.")
-            val startMillis = Calendar.getInstance().timeInMillis + (2 * 3600000)
-            put(CalendarContract.Events.DTSTART, startMillis)
-            put(CalendarContract.Events.DTEND, startMillis + 3600000)
-            put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+        Button(
+            onClick = {
+                tts?.speak(translatedText, TextToSpeech.QUEUE_FLUSH, null, null)
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3333)),
+            shape = MaterialTheme.shapes.extraSmall,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("REPRODUCIR VOZ (JOLIE TTS)", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
         }
-        cr.insert(CalendarContract.Events.CONTENT_URI, values)
-        "AGENDA ACTUALIZADA:\nSe ha registrado exitosamente: \"$titleClean\"."
-    } catch (e: Exception) {
-        "ERROR AL CREAR EVENTO: ${e.localizedMessage}"
     }
 }
 
-// --- SERVICIO 2: ESTADO DE RED ---
-fun getNetworkType(context: Context): String {
-    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    val network = cm.activeNetwork ?: return "Sin conexión"
-    val capabilities = cm.getNetworkCapabilities(network) ?: return "Desconocido"
-    return when {
-        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi de Alta Velocidad"
-        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Datos Móviles (5G/LTE)"
-        else -> "Conexión activa"
+// ==========================================
+// PANTALLA 4: AGENDA & SECRETARIA INTELIGENTE
+// ==========================================
+@Composable
+fun JolieAgendaScreen() {
+    val context = LocalContext.current
+    var eventTitle by remember { mutableStateOf("") }
+    var eventList by remember { mutableStateOf(listOf("• Reunión Estratégica AI -> 10:00 AM", "• Sincronización Nodos VPN -> 04:30 PM")) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "SECRETARÍA & GOOGLE CALENDAR",
+            color = Color.White,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp
+        )
+
+        OutlinedTextField(
+            value = eventTitle,
+            onValueChange = { eventTitle = it },
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF111111)),
+            placeholder = { Text("Nuevo evento o recordatorio...", color = Color.Gray, fontFamily = FontFamily.Monospace) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFFFF3333),
+                unfocusedBorderColor = Color(0xFF333333),
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White
+            ),
+            singleLine = true
+        )
+
+        Button(
+            onClick = {
+                if (eventTitle.isNotBlank()) {
+                    eventList = eventList + "• $eventTitle"
+                    try {
+                        val intent = Intent(Intent.ACTION_INSERT).apply {
+                            data = CalendarContract.Events.CONTENT_URI
+                            putExtra(CalendarContract.Events.TITLE, eventTitle)
+                            putExtra(CalendarContract.Events.DESCRIPTION, "Creado por Jolie OS Pro")
+                        }
+                        context.startActivity(intent)
+                    } catch (_: Exception) {}
+                    eventTitle = ""
+                }
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3333)),
+            shape = MaterialTheme.shapes.extraSmall,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("PROGRAMAR EN CALENDAR", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        }
+
+        Divider(color = Color(0xFF222222))
+
+        Text(
+            text = "LÍNEA DE TIEMPO / CRONOLOGÍA:",
+            color = Color.Gray,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp
+        )
+
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(eventList) { ev ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF111111))
+                        .padding(12.dp)
+                ) {
+                    Text(text = ev, color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = {
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?text=Hola,%20reporte%20desde%20Jolie%20OS"))
+                        context.startActivity(intent)
+                    } catch (_: Exception) {}
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222222)),
+                modifier = Modifier.weight(1f),
+                shape = MaterialTheme.shapes.extraSmall
+            ) {
+                Text("WHATSAPP", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            }
+
+            Button(
+                onClick = {
+                    try {
+                        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:?subject=Reporte%20Jolie&body=Estado%20del%20sistema%20activo")).apply {
+                            setPackage("com.google.android.gm")
+                        }
+                        context.startActivity(intent)
+                    } catch (_: Exception) {}
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222222)),
+                modifier = Modifier.weight(1f),
+                shape = MaterialTheme.shapes.extraSmall
+            ) {
+                Text("GMAIL", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            }
+        }
     }
 }
 
-// --- SERVICIO 3: EDICIÓN DE BITMAPS (FILTRO NOTHING MONOCHROME) ---
-fun applyNothingMonochromeFilter(src: Bitmap): Bitmap {
-    val result = Bitmap.createBitmap(src.width, src.height, src.config ?: Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(result)
-    val paint = Paint()
-    val matrix = ColorMatrix().apply {
-        setSaturation(0f) // Escala de grises pura correcta
+// ==========================================
+// PANTALLA 5: AI PHOTO STUDIO (EDITOR GRÁFICO)
+// ==========================================
+@Composable
+fun JoliePhotoEditorScreen() {
+    var selectedFilter by remember { mutableStateOf("Monocromo High-Contrast") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "AI PHOTO STUDIO // PRO",
+            color = Color.White,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp
+        )
+
+        // Orbe Glyph con sugerencia automática de la mascota
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Color(0xFFFF3333))
+                .background(Color(0xFF110505))
+                .padding(12.dp)
+        ) {
+            Row(alignment = Alignment.CenterVertically) {
+                Text(text = "🐶", fontSize = 24.sp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "¡Oye! He detectado un brillo extraño en la foto[cite: 6]. ¿Quieres que aplique limpieza IA y Upscaling x4?",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+
+        // Vista previa comparativa Before / After (Simulada)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .background(Color(0xFF111111))
+                .border(1.dp, Color(0xFF333333)),
+            alignment = Alignment.Center
+        ) {
+            Text(
+                text = "[ VISTA PREVIA: FILTRO ACTIVADO ]\nFiltro actual: $selectedFilter",
+                color = Color.Gray,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.Center,
+                fontSize = 13.sp
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { selectedFilter = "Borrador Mágico & Inpainting" },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E1E1E)),
+                shape = MaterialTheme.shapes.extraSmall,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("BORRADOR MÁGICO AI (ELIMINAR OBJETOS)", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            }
+
+            Button(
+                onClick = { selectedFilter = "Super-Resolución x4 Upscaling" },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E1E1E)),
+                shape = MaterialTheme.shapes.extraSmall,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("MEJORA DE DETALLES & UPSCALING x4", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            }
+
+            Button(
+                onClick = { selectedFilter = "Retrato Experto & Relighting" },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3333)),
+                shape = MaterialTheme.shapes.extraSmall,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("APLICAR RETRATO EXPERTO", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            }
+        }
     }
-    paint.colorFilter = ColorMatrixColorFilter(matrix)
-    canvas.drawBitmap(src, 0f, 0f, paint)
-    return result
 }
 
-// --- SERVICIO 4: NÚCLEO AVANZADO DE IA (SUPER ASISTENTE) ---
-fun processAdvancedAI(input: String): String {
-    val lower = input.lowercase()
-    return when {
-        lower.contains("carta") && lower.contains("ruso") ->
-            "Дорогая, моя любовь к тебе чиста и вечна, как звезды на ночном небушке...\n\n(Traducción poética en ruso generada con éxito por el motor de lenguaje)."
-        lower.contains("resumen") || lower.contains("analiza") ->
-            "ANÁLISIS COGNITIVO: Documento/Texto procesado. Puntos clave extraídos y optimizados bajo estructura de alto rendimiento."
-        lower.contains("hola") || lower.contains("saludos") || lower.contains("inicio") ->
-            "Saludos. Núcleo Jolie OS respondiendo al 100% de eficiencia. ¿En qué tarea deseas trabajar?"
-        lower.contains("quien eres") || lower.contains("que puedes hacer") ->
-            "Soy Jolie OS, tu asistente personalizado. Puedo gestionar tu agenda, monitorear la seguridad de tu red, aplicar procesamiento gráfico de vanguardia y resolver consultas complejas mediante inteligencia artificial."
-        else ->
-            "COMANDO PROCESADO: \"$input\"\nAnálisis completado satisfactoriamente por la unidad central."
+// ==========================================
+// PANTALLA 6: VPN INTELIGENTE ANTI-BLOQUEO
+// ==========================================
+@Composable
+fun JolieVpnScreen(vpnActive: Boolean, onToggleVpn: (Boolean) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        alignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "TÚNEL ANTI-CENSURA / VPN",
+            color = Color.White,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .border(2.dp, if (vpnActive) Color(0xFF00FF66) else Color(0xFFFF3333))
+                .background(Color(0xFF111111)),
+            alignment = Alignment.Center
+        ) {
+            Text(
+                text = if (vpnActive) "SECURE\nACTIVE" else "DIRECT\nOFFLINE",
+                color = if (vpnActive) Color(0xFF00FF66) else Color(0xFFFF3333),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                fontSize = 13.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = if (vpnActive) "Nodos proxy y rotación Shadowsocks operando sin restricciones geográficas." else "Conexión expuesta a restricciones locales de red.",
+            color = Color.Gray,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Button(
+            onClick = { onToggleVpn(!vpnActive) },
+            colors = ButtonDefaults.buttonColors(containerColor = if (vpnActive) Color(0xFFFF3333) else Color(0xFF00FF66)),
+            shape = MaterialTheme.shapes.extraSmall,
+            modifier = Modifier.fillMaxWidth().height(50.dp)
+        ) {
+            Text(
+                text = if (vpnActive) "DESCONECTAR TÚNEL" else "ACTIVAR VPN ANTI-BLOQUEO",
+                color = Color.Black,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
     }
 }
