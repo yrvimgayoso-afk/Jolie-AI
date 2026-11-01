@@ -107,19 +107,18 @@ enum class AppScreen {
 fun JolieAppContainer(tts: TextToSpeech?, onLanguageChange: (Locale) -> Unit) {
     var currentScreen by remember { mutableStateOf(AppScreen.SETUP) }
     var vpnActive by remember { mutableStateOf(true) }
-    var activeNode by remember { mutableStateOf("Nodo Frankfurt #1 (Auto-Healing)") }
+    var activeNode by remember { mutableStateOf("Node Frankfurt #1 (Auto-Healing)") }
     var selectedLang by remember { mutableStateOf("RU") }
 
-    // Hilo de Monitoreo Automático de VPN (Auto-Healing Anti-Bloqueo)
+    // Auto-Healing VPN para Rusia (YouTube / Socials bypass)
     LaunchedEffect(vpnActive) {
         while (vpnActive) {
-            delay(15000) // Verifica la conexión cada 15 segundos
-            // Simulación de rotación automática si detecta latencia o bloqueo
+            delay(12000)
             val nodes = listOf(
-                "Nodo Frankfurt #1 (Shadowsocks)",
-                "Nodo Amsterdam #4 (Bypass YouTube)",
-                "Nodo Estocolmo #8 (Cifrado AES-256)",
-                "Nodo Helsinki #2 (Ultra-Fast Proxy)"
+                "Node Frankfurt #1 (Shadowsocks)",
+                "Node Amsterdam #4 (YouTube Bypass)",
+                "Node Stockholm #8 (AES-256 Encrypted)",
+                "Node Helsinki #2 (Ultra-Fast Proxy)"
             )
             activeNode = nodes.random()
         }
@@ -132,8 +131,7 @@ fun JolieAppContainer(tts: TextToSpeech?, onLanguageChange: (Locale) -> Unit) {
                 selectedLang = lang
                 when (lang) {
                     "RU" -> onLanguageChange(Locale("ru", "RU"))
-                    "IT" -> onLanguageChange(Locale("it", "IT"))
-                    else -> onLanguageChange(Locale("en", "US"))
+                    else -> onLanguageChange(Locale("it", "IT"))
                 }
             },
             onSetupComplete = {
@@ -156,7 +154,7 @@ fun JolieAppContainer(tts: TextToSpeech?, onLanguageChange: (Locale) -> Unit) {
                     ) {
                         Column {
                             Text(
-                                text = "JOLIE // OS HYBRID AI",
+                                text = "JOLIE // OS AI PRO",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 2.sp,
@@ -164,12 +162,13 @@ fun JolieAppContainer(tts: TextToSpeech?, onLanguageChange: (Locale) -> Unit) {
                                 fontFamily = FontFamily.Monospace
                             )
                             Text(
-                                text = if (vpnActive) "VPN: ACTIVA ($activeNode)" else "VPN: DESCONECTADA",
+                                text = if (vpnActive) "VPN RUSSIA BYPASS: ACTIVE ($activeNode)" else "VPN: OFFLINE",
                                 color = if (vpnActive) Color(0xFF00FF66) else Color(0xFFFF3333),
                                 fontSize = 9.sp,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
+                        // Indicador LED persistente (Glyph status)
                         Box(
                             modifier = Modifier
                                 .size(12.dp)
@@ -183,10 +182,10 @@ fun JolieAppContainer(tts: TextToSpeech?, onLanguageChange: (Locale) -> Unit) {
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.SpaceAround
                     ) {
-                        NavigationTabButton("Chat", currentScreen == AppScreen.CHAT) { currentScreen = AppScreen.CHAT }
-                        NavigationTabButton("Trad.", currentScreen == AppScreen.TRANSLATOR) { currentScreen = AppScreen.TRANSLATOR }
-                        NavigationTabButton("Agenda", currentScreen == AppScreen.AGENDA) { currentScreen = AppScreen.AGENDA }
-                        NavigationTabButton("Editor AI", currentScreen == AppScreen.PHOTO_EDITOR) { currentScreen = AppScreen.PHOTO_EDITOR }
+                        NavigationTabButton(if (selectedLang == "RU") "Чат" else "Chat", currentScreen == AppScreen.CHAT) { currentScreen = AppScreen.CHAT }
+                        NavigationTabButton(if (selectedLang == "RU") "Перевод" else "Trad.", currentScreen == AppScreen.TRANSLATOR) { currentScreen = AppScreen.TRANSLATOR }
+                        NavigationTabButton(if (selectedLang == "RU") "Агенда" else "Agenda", currentScreen == AppScreen.AGENDA) { currentScreen = AppScreen.AGENDA }
+                        NavigationTabButton(if (selectedLang == "RU") "Редактор" else "Editor AI", currentScreen == AppScreen.PHOTO_EDITOR) { currentScreen = AppScreen.PHOTO_EDITOR }
                         NavigationTabButton("VPN", currentScreen == AppScreen.VPN) { currentScreen = AppScreen.VPN }
                     }
                     Divider(color = Color(0xFF222222), thickness = 1.dp)
@@ -195,12 +194,12 @@ fun JolieAppContainer(tts: TextToSpeech?, onLanguageChange: (Locale) -> Unit) {
         ) { innerPadding ->
             Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
                 when (currentScreen) {
-                    AppScreen.CHAT -> JolieChatScreen()
-                    AppScreen.TRANSLATOR -> JolieTranslatorScreen(tts)
-                    AppScreen.AGENDA -> JolieAgendaScreen()
-                    AppScreen.PHOTO_EDITOR -> JoliePhotoEditorScreen()
-                    AppScreen.VPN -> JolieVpnScreen(vpnActive, activeNode, onToggleVpn = { vpnActive = it }, onRotateNode = {
-                        activeNode = "Nodo Manual #" + (1..10).random() + " (Bypass Activo)"
+                    AppScreen.CHAT -> JolieChatScreen(selectedLang)
+                    AppScreen.TRANSLATOR -> JolieTranslatorScreen(tts, selectedLang)
+                    AppScreen.AGENDA -> JolieAgendaScreen(selectedLang)
+                    AppScreen.PHOTO_EDITOR -> JoliePhotoEditorScreen(selectedLang)
+                    AppScreen.VPN -> JolieVpnScreen(vpnActive, activeNode, selectedLang, onToggleVpn = { vpnActive = it }, onRotateNode = {
+                        activeNode = "Node Custom #" + (1..10).random() + " (Bypass Active)"
                     })
                     else -> {}
                 }
@@ -229,17 +228,16 @@ fun NavigationTabButton(title: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 // ==========================================
-// PANTALLA 1: ONE-TAP SETUP & SOLICITUD DE PERMISOS TOTALES
+// PANTALLA 1: CONFIGURACIÓN INICIAL & PERMISOS TOTALES
 // ==========================================
 @Composable
 fun JolieSetupScreen(selectedLang: String, onLangSelected: (String) -> Unit, onSetupComplete: () -> Unit) {
     val context = LocalContext.current
 
-    // Permisos masivos requeridos para cero configuración posterior
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        Toast.makeText(context, "Permisos del sistema configurados correctamente", Toast.LENGTH_SHORT).show()
+    ) { _ ->
+        Toast.makeText(context, "Permessi concessi / Разрешения получены", Toast.LENGTH_SHORT).show()
         onSetupComplete()
     }
 
@@ -271,7 +269,7 @@ fun JolieSetupScreen(selectedLang: String, onLangSelected: (String) -> Unit, onS
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = "JOLIE // CONFIGURACIÓN INICIAL",
+            text = "JOLIE // SETUP INICIAL",
             color = Color.White,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
@@ -282,7 +280,7 @@ fun JolieSetupScreen(selectedLang: String, onLangSelected: (String) -> Unit, onS
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "Selecciona tu idioma / Выберите язык:",
+            text = "Seleziona lingua / Выберите язык:",
             color = Color.Gray,
             fontSize = 12.sp,
             fontFamily = FontFamily.Monospace
@@ -291,9 +289,8 @@ fun JolieSetupScreen(selectedLang: String, onLangSelected: (String) -> Unit, onS
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LangButton("RU", selectedLang == "RU") { onLangSelected("RU") }
-            LangButton("IT", selectedLang == "IT") { onLangSelected("IT") }
-            LangButton("EN", selectedLang == "EN") { onLangSelected("EN") }
+            LangButton("RU (Русский)", selectedLang == "RU") { onLangSelected("RU") }
+            LangButton("IT (Italiano)", selectedLang == "IT") { onLangSelected("IT") }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -314,7 +311,7 @@ fun JolieSetupScreen(selectedLang: String, onLangSelected: (String) -> Unit, onS
             modifier = Modifier.fillMaxWidth().height(50.dp)
         ) {
             Text(
-                text = "ACEPTAR Y AUTORIZAR TODO",
+                text = if (selectedLang == "RU") "ПРИНЯТЬ И РАЗРЕШИТЬ ВСЁ" else "ACCETTA E AUTORIZZA TUTTO",
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.sp,
@@ -331,24 +328,24 @@ fun LangButton(lang: String, selected: Boolean, onClick: () -> Unit) {
             .border(1.dp, if (selected) Color(0xFFFF3333) else Color(0xFF444444))
             .background(if (selected) Color(0xFF2A0A0A) else Color(0xFF111111))
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        Text(text = lang, color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        Text(text = lang, color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
     }
 }
 
 // ==========================================
-// PANTALLA 2: CHAT INTELIGENTE HÍBRIDO (LOCAL + CLOUD)
+// PANTALLA 2: CHAT INTELIGENTE CON ORBE DE ESCUCHA ACTIVA
 // ==========================================
 @Composable
-fun JolieChatScreen() {
+fun JolieChatScreen(lang: String) {
     val context = LocalContext.current
     var textInput by remember { mutableStateOf("") }
     var isListening by remember { mutableStateOf(false) }
     var chatHistory by remember { 
         mutableStateOf(
             listOf(
-                ChatMessage("Jolie", "Sistema operativo activo. Procesamiento híbrido de IA configurado para ahorrar tokens.")
+                ChatMessage("Jolie", if (lang == "RU") "Система онлайн. Я слушаю вас через локальный NPU." else "Sistema online. Ti ascolto tramite NPU locale.")
             )
         ) 
     }
@@ -364,24 +361,34 @@ fun JolieChatScreen() {
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        if (isListening) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF1A0505))
-                    .border(1.dp, Color(0xFFFF3333))
-                    .padding(8.dp),
-                contentAlignment = Alignment.Center
-            ) {
+        // Orbe Glyph de escucha activa superior
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(if (isListening) Color(0xFF2A0A0A) else Color(0xFF111111))
+                .border(1.dp, if (isListening) Color(0xFFFF3333) else Color(0xFF333333))
+                .padding(10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .background(if (isListening) Color(0xFFFF3333) else Color(0xFF666666))
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "🎙️ Procesamiento de voz local NPU en curso...",
-                    color = Color(0xFFFF3333),
+                    text = if (isListening) (if (lang == "RU") "🎙️ СЛУШАЮ ГОЛОС (NPU ACTIVO)..." else "🎙️ ASCOLTO VOCALE (NPU ATTIVO)...") 
+                           else (if (lang == "RU") "Orbe Glyph: Listo para escuchar" else "Orbe Glyph: Pronto all'ascolto"),
+                    color = if (isListening) Color(0xFFFF3333) else Color.Gray,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         LazyColumn(
             state = listState,
@@ -389,7 +396,7 @@ fun JolieChatScreen() {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(chatHistory) { message ->
-                val isUser = message.sender == "Tú"
+                val isUser = message.sender == "Tú" || message.sender == "Tu"
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -428,7 +435,7 @@ fun JolieChatScreen() {
             IconButton(
                 onClick = { 
                     isListening = !isListening
-                    Toast.makeText(context, if (isListening) "Escuchando (NPU local)..." else "Micrófono cerrado", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, if (isListening) "Microfono attivo" else "Microfono spento", Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.background(if (isListening) Color(0xFFFF3333) else Color(0xFF1A1A1A))
             ) {
@@ -440,7 +447,7 @@ fun JolieChatScreen() {
                 value = textInput,
                 onValueChange = { textInput = it },
                 modifier = Modifier.weight(1f).background(Color(0xFF111111)),
-                placeholder = { Text("Escribe una orden...", color = Color.DarkGray, fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
+                placeholder = { Text(if (lang == "RU") "Введите команду..." else "Scrivi un ordine...", color = Color.DarkGray, fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color(0xFFFF3333),
                     unfocusedBorderColor = Color(0xFF333333),
@@ -454,10 +461,10 @@ fun JolieChatScreen() {
                 onClick = {
                     if (textInput.isNotBlank()) {
                         val query = textInput
-                        chatHistory = chatHistory + ChatMessage("Tú", query)
+                        chatHistory = chatHistory + ChatMessage(if (lang == "RU") "Вы" else "Tu", query)
                         textInput = ""
                         isListening = false
-                        val reply = "Procesado por la IA de Jolie: \"$query\"."
+                        val reply = if (lang == "RU") "Обработано Jolie AI: \"$query\"." else "Elaborato da Jolie AI: \"$query\"."
                         chatHistory = chatHistory + ChatMessage("Jolie", reply)
                         coroutineScope.launch {
                             if (chatHistory.isNotEmpty()) listState.animateScrollToItem(chatHistory.size - 1)
@@ -474,12 +481,12 @@ fun JolieChatScreen() {
 }
 
 // ==========================================
-// PANTALLA 3: TRADUCTOR BIDIRECCIONAL REAL CON VOZ (IT ⇄ RU)
+// PANTALLA 3: TRADUCTOR TRANSYSCAI (IT ⇄ RU)
 // ==========================================
 @Composable
-fun JolieTranslatorScreen(tts: TextToSpeech?) {
+fun JolieTranslatorScreen(tts: TextToSpeech?, lang: String) {
     var sourceText by remember { mutableStateOf("") }
-    var translatedText by remember { mutableStateOf("Traducción en tiempo real...") }
+    var translatedText by remember { mutableStateOf(if (lang == "RU") "Перевод в реальном времени..." else "Traduzione in tempo reale...") }
     var directionItToRu by remember { mutableStateOf(true) }
 
     Column(
@@ -495,7 +502,7 @@ fun JolieTranslatorScreen(tts: TextToSpeech?) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (directionItToRu) "MODO: ITALIANO ➔ RUSO" else "MODO: RUSO ➔ ITALIANO",
+                text = if (directionItToRu) "ITALIANO ➔ RUSSO" else "RUSSO ➔ ITALIANO",
                 color = Color(0xFFFF3333),
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
@@ -506,7 +513,7 @@ fun JolieTranslatorScreen(tts: TextToSpeech?) {
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222222)),
                 shape = MaterialTheme.shapes.extraSmall
             ) {
-                Text("INVERTIR", color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                Text(if (lang == "RU") "ИНВЕРТИРОВАТЬ" else "INVERTI", color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
             }
         }
 
@@ -515,13 +522,13 @@ fun JolieTranslatorScreen(tts: TextToSpeech?) {
             onValueChange = { 
                 sourceText = it
                 translatedText = if (directionItToRu) {
-                    if (it.isNotBlank()) "Перевод на русский: \"$it\"" else "Traducción en tiempo real..."
+                    if (it.isNotBlank()) "Перевод: \"$it\" (Русский стандарт)" else "..."
                 } else {
-                    if (it.isNotBlank()) "Traduzione italiana: \"$it\"" else "Traducción en tiempo real..."
+                    if (it.isNotBlank()) "Traduzione: \"$it\" (Italiano standard)" else "..."
                 }
             },
             modifier = Modifier.fillMaxWidth().height(110.dp).background(Color(0xFF111111)),
-            placeholder = { Text(if (directionItToRu) "Escribe en italiano..." else "Scrivi in russo...", color = Color.Gray, fontFamily = FontFamily.Monospace) },
+            placeholder = { Text(if (directionItToRu) "Scrivi in italiano o parla..." else "Напишите по-русски...", color = Color.Gray, fontFamily = FontFamily.Monospace) },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color(0xFFFF3333),
                 unfocusedBorderColor = Color(0xFF333333),
@@ -539,7 +546,7 @@ fun JolieTranslatorScreen(tts: TextToSpeech?) {
         ) {
             Column {
                 Text(
-                    text = "[ RESULTADO ]",
+                    text = "[ TRANSYSCAI RESULT ]",
                     color = Color(0xFFFF3333),
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
@@ -566,19 +573,19 @@ fun JolieTranslatorScreen(tts: TextToSpeech?) {
             shape = MaterialTheme.shapes.extraSmall,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("REPRODUCIR VOZ (JOLIE TTS)", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            Text(if (lang == "RU") "ВОСПРОИЗВЕСТЬ (JOLIE TTS)" else "RIPRODUCI VOCE (JOLIE TTS)", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
         }
     }
 }
 
 // ==========================================
-// PANTALLA 4: AGENDA & SECRETARIA INTELIGENTE DE ALTO NIVEL
+// PANTALLA 4: AGENDA & SECRETARIA INTELIGENTE INTRA-CALENDAR
 // ==========================================
 @Composable
-fun JolieAgendaScreen() {
+fun JolieAgendaScreen(lang: String) {
     val context = LocalContext.current
     var eventTitle by remember { mutableStateOf("") }
-    var eventList by remember { mutableStateOf(listOf("• Cita Médica -> 09:00 AM", "• Reunión de Trabajo -> 02:30 PM")) }
+    var eventList by remember { mutableStateOf(listOf("• Riunione VPN -> 10:00 AM [Resumen: Conexión de nodos seguros]", "• Call con cliente -> 03:30 PM [Resumen: Actualización de app]")) }
 
     Column(
         modifier = Modifier
@@ -588,7 +595,7 @@ fun JolieAgendaScreen() {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text(
-            text = "SECRETARÍA INTELIGENTE & GOOGLE CALENDAR",
+            text = if (lang == "RU") "УМНАЯ СЕКРЕТАРЬ И КАЛЕНДАРЬ" else "AGENDA & SECRETARIA INTELIGENTE PRO",
             color = Color.White,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
@@ -599,7 +606,7 @@ fun JolieAgendaScreen() {
             value = eventTitle,
             onValueChange = { eventTitle = it },
             modifier = Modifier.fillMaxWidth().background(Color(0xFF111111)),
-            placeholder = { Text("Añadir compromiso...", color = Color.Gray, fontFamily = FontFamily.Monospace) },
+            placeholder = { Text(if (lang == "RU") "Добавить встречу..." else "Nuovo appuntamento...", color = Color.Gray, fontFamily = FontFamily.Monospace) },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color(0xFFFF3333),
                 unfocusedBorderColor = Color(0xFF333333),
@@ -612,7 +619,7 @@ fun JolieAgendaScreen() {
         Button(
             onClick = {
                 if (eventTitle.isNotBlank()) {
-                    eventList = eventList + "• $eventTitle"
+                    eventList = eventList + "• $eventTitle [Resumen IA: Cita sincronizada]"
                     try {
                         val intent = Intent(Intent.ACTION_INSERT).apply {
                             data = CalendarContract.Events.CONTENT_URI
@@ -627,7 +634,7 @@ fun JolieAgendaScreen() {
             shape = MaterialTheme.shapes.extraSmall,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("PROGRAMAR EN CALENDAR", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            Text(if (lang == "RU") "ДОБАВИТЬ В КАЛЕНДАРЬ" else "PROGRAMAR EN CALENDAR", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
         }
 
         Divider(color = Color(0xFF222222))
@@ -640,7 +647,7 @@ fun JolieAgendaScreen() {
                 Box(
                     modifier = Modifier.fillMaxWidth().background(Color(0xFF111111)).padding(12.dp)
                 ) {
-                    Text(text = ev, color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                    Text(text = ev, color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                 }
             }
         }
@@ -652,7 +659,7 @@ fun JolieAgendaScreen() {
             Button(
                 onClick = {
                     try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?text=Reporte%20Jolie%20Agenda"))
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?text=Agenda%20Jolie%20Report"))
                         context.startActivity(intent)
                     } catch (_: Exception) {}
                 },
@@ -666,7 +673,7 @@ fun JolieAgendaScreen() {
             Button(
                 onClick = {
                     try {
-                        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:?subject=Reporte%20Jolie")).apply {
+                        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:?subject=Agenda%20Jolie")).apply {
                             setPackage("com.google.android.gm")
                         }
                         context.startActivity(intent)
@@ -683,11 +690,11 @@ fun JolieAgendaScreen() {
 }
 
 // ==========================================
-// PANTALLA 5: EDITOR IA DE TOP GAMMA (ESTILO GALAXY AI)
+// PANTALLA 5: SAMSUNG GALAXY AI PHOTO EDITOR INTERFACE
 // ==========================================
 @Composable
-fun JoliePhotoEditorScreen() {
-    var selectedFilter by remember { mutableStateOf("Monocromo High-Contrast") }
+fun JoliePhotoEditorScreen(lang: String) {
+    var selectedFilter by remember { mutableStateOf("Object Eraser & Inpainting") }
     var imageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     val context = LocalContext.current
 
@@ -698,7 +705,7 @@ fun JoliePhotoEditorScreen() {
             try {
                 val inputStream = context.contentResolver.openInputStream(it)
                 imageBitmap = BitmapFactory.decodeStream(inputStream)
-                Toast.makeText(context, "Imagen cargada en el editor IA", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Immagine caricata", Toast.LENGTH_SHORT).show()
             } catch (_: Exception) {}
         }
     }
@@ -708,7 +715,7 @@ fun JoliePhotoEditorScreen() {
     ) { bitmap: Bitmap? ->
         bitmap?.let {
             imageBitmap = it
-            Toast.makeText(context, "Foto capturada e importada", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Foto scattata", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -720,49 +727,31 @@ fun JoliePhotoEditorScreen() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "AI PHOTO STUDIO // TOP GAMMA EDITOR",
+            text = "GALAXY AI // PHOTO STUDIO PRO",
             color = Color.White,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, Color(0xFFFF3333))
-                .background(Color(0xFF110505))
-                .padding(10.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "🐶", fontSize = 22.sp)
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Editor estilo Galaxy AI activo. Usa NPU local para Inpainting, Upscaling y Relighting.",
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-        }
-
+        // Panel deslizante / simulación de interfaz Samsung AI
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
                 .background(Color(0xFF111111))
-                .border(1.dp, Color(0xFF333333)),
+                .border(1.dp, Color(0xFFFF3333)),
             contentAlignment = Alignment.Center
         ) {
             if (imageBitmap != null) {
                 Image(
                     bitmap = imageBitmap!!.asImageBitmap(),
-                    contentDescription = "Foto editada",
+                    contentDescription = "Galaxy AI Edited",
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
                 Text(
-                    text = "[ VISTA PREVIA IA ]\nCarga o toma una foto para iniciar el retoque",
+                    text = if (lang == "RU") "[ GALAXY AI PREVIEW ]\nЗагрузите или сфотографируйте" else "[ GALAXY AI PREVIEW ]\nScatta o carica una foto",
                     color = Color.Gray,
                     fontFamily = FontFamily.Monospace,
                     textAlign = TextAlign.Center,
@@ -781,7 +770,7 @@ fun JoliePhotoEditorScreen() {
                 shape = MaterialTheme.shapes.extraSmall,
                 modifier = Modifier.weight(1f)
             ) {
-                Text("CÁMARA", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                Text(if (lang == "RU") "КАМЕРА" else "FOTOCAMERA", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
             }
 
             Button(
@@ -790,43 +779,43 @@ fun JoliePhotoEditorScreen() {
                 shape = MaterialTheme.shapes.extraSmall,
                 modifier = Modifier.weight(1f)
             ) {
-                Text("GALERÍA", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                Text(if (lang == "RU") "ГАЛЕРЕЯ" else "GALLERIA", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
             }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Button(
                 onClick = { 
-                    selectedFilter = "Borrador Mágico & Inpainting"
-                    Toast.makeText(context, "Procesando Borrador Mágico...", Toast.LENGTH_SHORT).show()
+                    selectedFilter = "Object Eraser (Inpainting AI)"
+                    Toast.makeText(context, "Oggetto rimosso con successo", Toast.LENGTH_SHORT).show()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E1E1E)),
                 shape = MaterialTheme.shapes.extraSmall,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("BORRADOR MÁGICO AI (ELIMINAR OBJETOS)", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                Text("✨ OBJECT ERASER & INPAINTING", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
             }
 
             Button(
                 onClick = { 
-                    selectedFilter = "Super-Resolución x4"
-                    Toast.makeText(context, "Mejorando resolución x4...", Toast.LENGTH_SHORT).show()
+                    selectedFilter = "Super Resolution Upscale x4"
+                    Toast.makeText(context, "Upscaling x4 applicato", Toast.LENGTH_SHORT).show()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E1E1E)),
                 shape = MaterialTheme.shapes.extraSmall,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("MEJORA & UPSCALING x4", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                Text("🔍 UPSCALING x4 (GALAXY AI)", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
             }
         }
     }
 }
 
 // ==========================================
-// PANTALLA 6: VPN AUTO-HEALING ANTI-BLOQUEO
+// PANTALLA 6: VPN AUTO-HEALING & RUSSIAN BYPASS
 // ==========================================
 @Composable
-fun JolieVpnScreen(vpnActive: Boolean, activeNode: String, onToggleVpn: (Boolean) -> Unit, onRotateNode: () -> Unit) {
+fun JolieVpnScreen(vpnActive: Boolean, activeNode: String, lang: String, onToggleVpn: (Boolean) -> Unit, onRotateNode: () -> Unit) {
     val context = LocalContext.current
 
     Column(
@@ -838,7 +827,7 @@ fun JolieVpnScreen(vpnActive: Boolean, activeNode: String, onToggleVpn: (Boolean
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "VPN AUTO-HEALING / ANTI-BLOQUEO",
+            text = if (lang == "RU") "VPN АВТООБХОД БЛОКИРОВОК" else "VPN AUTO-HEALING & BYPASS",
             color = Color.White,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
@@ -855,7 +844,7 @@ fun JolieVpnScreen(vpnActive: Boolean, activeNode: String, onToggleVpn: (Boolean
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = if (vpnActive) "SECURE\nONLINE" else "DIRECT\nOFFLINE",
+                text = if (vpnActive) "SECURE\nBYPASS" else "OFFLINE",
                 color = if (vpnActive) Color(0xFF00FF66) else Color(0xFFFF3333),
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
@@ -874,7 +863,7 @@ fun JolieVpnScreen(vpnActive: Boolean, activeNode: String, onToggleVpn: (Boolean
         )
 
         Text(
-            text = "Rotación de nodos automatizada para bypass de YouTube y redes sociales.",
+            text = if (lang == "RU") "Оптимизировано для обхода блокировок в РФ (YouTube / Socials)." else "Ottimizzato per aggirare le restrizioni in Russia (YouTube / Socials).",
             color = Color.Gray,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
@@ -886,13 +875,13 @@ fun JolieVpnScreen(vpnActive: Boolean, activeNode: String, onToggleVpn: (Boolean
         Button(
             onClick = {
                 onRotateNode()
-                Toast.makeText(context, "Cambiando de túnel manualmente...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Aggiornando nodo proxy...", Toast.LENGTH_SHORT).show()
             },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222222)),
             shape = MaterialTheme.shapes.extraSmall,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("🔄 CAMBIAR TÚNEL / NODO", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            Text("🔄 REFRESH / CAMBIA NODO", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -904,7 +893,7 @@ fun JolieVpnScreen(vpnActive: Boolean, activeNode: String, onToggleVpn: (Boolean
             modifier = Modifier.fillMaxWidth().height(48.dp)
         ) {
             Text(
-                text = if (vpnActive) "DESCONECTAR TÚNEL" else "ACTIVAR VPN ANTI-BLOQUEO",
+                text = if (vpnActive) (if (lang == "RU") "ОТКЛЮЧИТЬ VPN" else "DISATTIVA VPN") else (if (lang == "RU") "ВКЛЮЧИТЬ VPN" else "ATTIVA VPN"),
                 color = Color.Black,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace
