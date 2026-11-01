@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Función auxiliar para autoincrementar el código de versión basado en la fecha/tiempo o un contador
+val autoVersionCode = (System.currentTimeMillis() / 1000).toInt()
+
 android {
     namespace = "com.jolie.assistant"
     compileSdk = 34
@@ -11,8 +14,10 @@ android {
         applicationId = "com.jolie.assistant"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        
+        // ¡AUTOMATIZADO! Se autoincrementa solo con el tiempo del sistema en cada build
+        versionCode = autoVersionCode
+        versionName = "1.${autoVersionCode % 100}"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -27,6 +32,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
