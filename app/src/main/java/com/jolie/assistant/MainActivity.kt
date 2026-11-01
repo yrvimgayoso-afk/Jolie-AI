@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
             JolieTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF0A0A0A) // Fondo oscuro estilo Nothing OS
+                    color = Color(0xFF0A0A0A)
                 ) {
                     JolieMainScreen()
                 }
@@ -37,7 +37,7 @@ fun JolieTheme(content: @Composable () -> Unit) {
         colorScheme = darkColorScheme(
             background = Color(0xFF0A0A0A),
             surface = Color(0xFF161616),
-            primary = Color(0xFFD71921), // Rojo acento Nothing
+            primary = Color(0xFFD71921),
             onPrimary = Color.White,
             onBackground = Color.White,
             onSurface = Color.White
@@ -59,7 +59,6 @@ fun JolieMainScreen() {
             .padding(24.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Cabecera Minimalista
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -76,14 +75,13 @@ fun JolieMainScreen() {
                 Box(
                     modifier = Modifier
                         .size(8.dp)
-                        .background(Color(0xFFD71921)) // Indicador rojo Nothing
+                        .background(Color(0xFFD71921))
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = Color(0xFF262626), thickness = 1.dp)
+            Divider(color = Color(0xFF262626), thickness = 1.dp)
         }
 
-        // Historial de conversación / Contenedor central
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -109,7 +107,6 @@ fun JolieMainScreen() {
             }
         }
 
-        // Barra de Entrada Estilo Dot Matrix / Minimal
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
