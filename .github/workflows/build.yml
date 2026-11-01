@@ -19,11 +19,14 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Make gradlew executable
-      run: chmod +x gradlew
+    - name: Download and Install Gradle 8.2
+      run: |
+        wget https://services.gradle.org/distributions/gradle-8.2-bin.zip
+        unzip -q gradle-8.2-bin.zip
+        echo "$PWD/gradle-8.2/bin" >> $GITHUB_PATH
 
     - name: Build APK with Gradle
-      run: ./gradlew assembleDebug --stacktrace
+      run: gradle assembleDebug --stacktrace
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
