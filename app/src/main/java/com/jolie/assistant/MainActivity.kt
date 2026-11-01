@@ -230,7 +230,7 @@ fun JolieMainScreen() {
 
                         val lower = query.lowercase()
                         val responseText = when {
-                            // 1. MÚSICA / AGENDA - LECTURA
+                            // 1. AGENDA - LECTURA
                             lower.contains("agenda") || lower.contains("eventos") || lower.contains("mis citas") -> {
                                 val hasRead = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
                                 if (hasRead) {
@@ -349,7 +349,7 @@ fun createQuickCalendarEvent(context: Context, rawCommand: String): String {
             put(CalendarContract.Events.CALENDAR_ID, 1)
             put(CalendarContract.Events.TITLE, "Jolie: $titleClean")
             put(CalendarContract.Events.DESCRIPTION, "Evento registrado por el Super Asistente Jolie AI.")
-            val startMillis = Calendar.getInstance().timeInMillis + (2 * 3600000) // En 2 horas
+            val startMillis = Calendar.getInstance().timeInMillis + (2 * 3600000)
             put(CalendarContract.Events.DTSTART, startMillis)
             put(CalendarContract.Events.DTEND, startMillis + 3600000)
             put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
@@ -379,7 +379,7 @@ fun applyNothingMonochromeFilter(src: Bitmap): Bitmap {
     val canvas = Canvas(result)
     val paint = Paint()
     val matrix = ColorMatrix().apply {
-        setSat(0f) // Escala de grises pura
+        setSaturation(0f) // Escala de grises pura correcta
     }
     paint.colorFilter = ColorMatrixColorFilter(matrix)
     canvas.drawBitmap(src, 0f, 0f, paint)
