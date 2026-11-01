@@ -19,21 +19,14 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Android SDK
-      uses: actions/setup-android@v3
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
 
     - name: Build APK with Gradle
-      run: |
-        if [ -f "./gradlew" ]; then
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
-        else
-          echo "Creando estructura inicial del proyecto..."
-        fi
+      run: gradle assembleDebug --stacktrace
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: Jolie-APK
         path: app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: ignore
