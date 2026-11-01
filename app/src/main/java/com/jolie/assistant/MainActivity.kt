@@ -1,7 +1,14 @@
 package com.jolie.assistant
 
+import android.Manifest
+import android.content.ContentResolver
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.CalendarContract
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -13,11 +20,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,7 +51,7 @@ fun JolieTheme(content: @Composable () -> Unit) {
         colorScheme = darkColorScheme(
             background = Color(0xFF0A0A0A),
             surface = Color(0xFF161616),
-            primary = Color(0xFFD71921), // Rojo acento Nothing OS
+            primary = Color(0xFFD71921),
             onPrimary = Color.White,
             onBackground = Color.White,
             onSurface = Color.White
@@ -52,17 +62,30 @@ fun JolieTheme(content: @Composable () -> Unit) {
 
 @Composable
 fun JolieMainScreen() {
+    val context = LocalContext.current
     var textInput by remember { mutableStateOf("") }
     var chatHistory by remember { 
         mutableStateOf(
             listOf(
-                ChatMessage("Jolie", "Sistema operativo v1.0 en línea. Núcleo IA activo. ¿Qué comando deseas ejecutar?")
+                ChatMessage("Jolie", "Sistema operativo v1.0 en línea. Módulo de Agenda activado. ¿Qué deseas hacer?")
             )
         ) 
     }
     
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+
+    // Solicitud dinámica de permisos para Android
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val agendaEvents = getCalendarEvents(context)
+            chatHistory = chatHistory + ChatMessage("Jolie", agendaEvents)
+        } else {
+            chatHistory = chatHistory + ChatMessage("Jolie", "Error: Permiso de calendario denegado por el usuario.")
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -72,7 +95,6 @@ fun JolieMainScreen() {
             .padding(24.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Cabecera Minimalista Nothing OS
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -90,14 +112,13 @@ fun JolieMainScreen() {
                 Box(
                     modifier = Modifier
                         .size(8.dp)
-                        .background(Color(0xFFD71921)) // Indicador LED rojo
+                        .background(Color(0xFFD71921))
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
             Divider(color = Color(0xFF262626), thickness = 1.dp)
         }
 
-        // Historial de Conversación Desplazable
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -134,7 +155,6 @@ fun JolieMainScreen() {
             }
         }
 
-        // Barra de Comandos / Entrada
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -145,7 +165,7 @@ fun JolieMainScreen() {
                 modifier = Modifier
                     .weight(1f)
                     .background(Color(0xFF161616)),
-                placeholder = { Text("Escribe una orden o prompt...", color = Color.Gray, fontFamily = FontFamily.Monospace) },
+                placeholder = { Text("Escribe un comando...", color = Color.Gray, fontFamily = FontFamily.Monospace) },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color(0xFFD71921),
                     unfocusedBorderColor = Color(0xFF333333),
@@ -159,14 +179,25 @@ fun JolieMainScreen() {
                 onClick = {
                     if (textInput.isNotBlank()) {
                         val query = textInput
-                        val updatedHistory = chatHistory + ChatMessage("Tú", query)
-                        
-                        // Procesamiento del Super Asistente (Lógica inteligente local / Simulador de respuestas complejas)
-                        val assistantResponse = generateJolieResponse(query)
-                        
-                        chatHistory = updatedHistory + ChatMessage("Jolie", assistantResponse)
+                        chatHistory = chatHistory + ChatMessage("Tú", query)
                         textInput = ""
-                        
+
+                        if (query.lowercase().contains("agenda") || query.lowercase().contains("evento")) {
+                            val permissionCheck = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.READ_CALENDAR
+                            )
+                            if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+                                val agendaEvents = getCalendarEvents(context)
+                                chatHistory = chatHistory + ChatMessage("Jolie", agendaEvents)
+                            } else {
+                                launcher.launch(Manifest.permission.READ_CALENDAR)
+                            }
+                        } else {
+                            val response = generateJolieResponse(query)
+                            chatHistory = chatHistory + ChatMessage("Jolie", response)
+                        }
+
                         coroutineScope.launch {
                             if (chatHistory.isNotEmpty()) {
                                 listState.animateScrollToItem(chatHistory.size - 1)
@@ -185,19 +216,62 @@ fun JolieMainScreen() {
 
 data class ChatMessage(val sender: String, val text: String)
 
-// Motor de Inteligencia Interno de Jolie (Basado en los maxi-prompts)
+// Función nativa para leer los eventos de la agenda de Android
+fun getCalendarEvents(context: Context): String {
+    val eventsList = mutableListOf<String>()
+    val contentResolver: ContentResolver = context.contentResolver
+    
+    val projection = arrayOf(
+        CalendarContract.Events.TITLE,
+        CalendarContract.Events.DTSTART
+    )
+    
+    val startTime = Calendar.getInstance().timeInMillis
+    val endTime = startTime + (7 * 24 * 60 * 60 * 1000L) // Próximos 7 días
+    
+    val selection = "${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.DTSTART} <= ?"
+    val selectionArgs = arrayOf(startTime.toString(), endTime.toString())
+
+    try {
+        val cursor = contentResolver.query(
+            CalendarContract.Events.CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            "${CalendarContract.Events.DTSTART} ASC"
+        )
+
+        cursor?.use {
+            val titleIndex = it.getColumnIndex(CalendarContract.Events.TITLE)
+            while (it.moveToNext()) {
+                val title = it.getString(titleIndex)
+                if (!title.isNull_or_blank()) {
+                    eventsList.add("• $title")
+                }
+            }
+        }
+    } catch (e: Exception) {
+        return "Error al acceder a la agenda: ${e.localizedMessage}"
+    }
+
+    return if (eventsList.isEmpty()) {
+        "Agenda analizada: No se encontraron eventos programados para los próximos 7 días."
+    } else {
+        "Agenda detectada:\n" + eventsList.take(5).joinToString("\n")
+    }
+}
+
+// Extensión auxiliar para evitar errores de compilación
+fun String?.isNull_or_blank(): Boolean = this == null || this.trim().isEmpty()
+
 fun generateJolieResponse(input: String): String {
     val lower = input.lowercase()
     return when {
         lower.contains("carta") && lower.contains("ruso") -> 
-            "Дорогая, моя любовь к тебе чиста и вечна, как звезды на ночном небушке... (Traducción y redacción completada con éxito bajo parámetros de alta sensibilidad poética)."
-        lower.contains("vpn") || lower.contains("red") -> 
-            "Módulo de Red: Túnel seguro cifrado listo. Estado del nodo: Estable (Simulación Nothing OS Active)."
-        lower.contains("imagen") || lower.contains("foto") -> 
-            "Procesador gráfico: No se detectó imagen de entrada. Sube una fotografía para aplicar filtros monocromáticos y estéticos."
+            "Дорогая, моя любовь к тебе чиста и вечна, как звезды на ночном небушке..."
         lower.contains("hola") || lower.contains("saludos") -> 
-            "Saludos. Los sistemas operativos y de asistencia cognitiva se encuentran al 100% de su capacidad."
+            "Saludos. Sistemas al 100%."
         else -> 
-            "Comando procesado: \"$input\". Análisis completado con éxito por el núcleo de Jolie AI."
+            "Comando procesado: \"$input\". Análisis completado con éxito."
     }
 }
