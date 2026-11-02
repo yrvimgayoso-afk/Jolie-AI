@@ -37,48 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
 
-data class AiMsg(val fromUser: Boolean, val text: String, val attachment: String? = null)
-
-private const val SYSTEM_TEXT =
-    "Sei Jolie, una segretaria personale intelligente, gentile e concisa. " +
-        "Rispondi sempre nella lingua in cui ti scrive l’utente (italiano o russo). " +
-        "Se ricevi la foto di un compito, di un esame o di un testo, leggila con attenzione, " +
-        "spiega il ragionamento passo per passo e poi dai la risposta. " +
-        "Usa frasi brevi e niente formattazione complicata, perché le risposte possono essere lette ad alta voce."
-
-private fun cleanMd(s: String): String =
-    s.replace("**", "")
-        .replace(Regex("(?m)^#+\\s*"), "")
-        .replace(Regex("(?m)^\\*\\s+"), "• ")
-
-private fun friendlyError(lang: String, e: Throwable): String {
-    if (e is GeminiHttpException) {
-        val hint = when (e.code) {
-            400 -> tr(lang, "Richiesta non valida o chiave non corretta.", "Неверный запрос или ключ.")
-            403 -> tr(lang, "Chiave rifiutata o paese non supportato (in Russia serve la VPN).", "Ключ отклонён или страна не поддерживается (в России нужен VPN).")
-            404 -> tr(lang, "Modello non trovato: tocca CHIAVE e cambia il nome del modello.", "Модель не найдена: нажмите КЛЮЧ и измените название модели.")
-            429 -> tr(lang, "Limite gratuito raggiunto: riprova tra poco.", "Бесплатный лимит исчерпан: повторите позже.")
-            else -> tr(lang, "Errore del servizio.", "Ошибка сервиса.")
-        }
-        return hint + "\n(" + e.code + ") " + (e.message ?: "").take(160)
-    }
-    val m = e.message ?: ""
-    if (e is IllegalArgumentException && m == "FORMAT") {
-        return tr(lang, "Formato non supportato. Usa immagini, PDF o testo semplice.", "Формат не поддерживается. Используйте изображения, PDF или текст.")
-    }
-    if (e is IllegalArgumentException && m == "SIZE") {
-        return tr(lang, "File troppo grande (massimo circa 14 MB).", "Файл слишком большой (максимум около 14 МБ).")
-    }
-    if (m.startsWith("BLOCKED")) {
-        return tr(lang, "Gemini ha bloccato la richiesta.", "Gemini заблокировал запрос.")
-    }
-    return tr(
-        lang,
-        "Nessuna risposta: controlla la connessione. Se sei in Russia attiva una VPN.",
-        "Нет ответа: проверьте соединение. В России включите VPN."
-    ) + "\n[" + e.javaClass.simpleName + "]"
-}
-
 @Composable
 private fun PulseRing(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "orb")
@@ -103,26 +61,24 @@ private fun PulseRing(modifier: Modifier = Modifier) {
 fun AiChatScreen(lang: String) {
     val context = LocalContext.current
     val prefs = remember { AiPrefs(context) }
-    val messages = remember {
-        mutableStateListOf(
-            AiMsg(
-                false,
-                tr(
-                    lang,
-                    "Ciao, sono Jolie. Scrivimi, tocca l’orbe per parlarmi oppure allega una foto o un PDF con il tasto +.",
-                    "Привет, я Джоли. Напишите мне, нажмите на шар, чтобы говорить, или прикрепите фото или PDF кнопкой +."
-                )
-            )
-        )
+    val greeting = tr(
+        lang,
+        "Ciao, sono Jolie. Scrivimi, tocca l’orbe per parlarmi oppure allega una foto o un PDF con il tasto +.",
+        "Привет, я Джоли. Напишите мне, нажмите на шар, чтобы говорить, или прикрепите фото или PDF кнопкой +."
+    )
+    remember {
+        ChatStore.ensureLoaded(context, greeting)
+        true
     }
-    val history = remember { mutableListOf<AiTurn>() }
+    val messages = ChatStore.messages
+    val loading = ChatStore.loading
+
     var input by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf(prefs.geminiKey) }
     var model by remember { mutableStateOf(prefs.geminiModel) }
     var showKeyCard by remember { mutableStateOf(prefs.geminiKey.isBlank()) }
     var pendingUri by remember { mutableStateOf<Uri?>(null) }
     var pendingName by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     // Voce di Jolie (sintesi vocale del telefono)
@@ -142,11 +98,16 @@ fun AiChatScreen(lang: String) {
         t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "jolie")
     }
 
+    DisposableEffect(Unit) {
+        ChatStore.speaker = { text -> speak(text) }
+        onDispose { ChatStore.speaker = null }
+    }
+
     fun send(textIn: String, spoken: Boolean) {
         val text = textIn.trim()
         val uri = pendingUri
         val name = pendingName
-        if ((text.isEmpty() && uri == null) || loading) return
+        if ((text.isEmpty() && uri == null) || ChatStore.loading) return
         if (apiKey.isBlank()) {
             showKeyCard = true
             return
@@ -154,24 +115,10 @@ fun AiChatScreen(lang: String) {
         val userText = if (text.isEmpty()) {
             tr(lang, "Leggi questo allegato e spiegamelo.", "Прочитай это вложение и объясни.")
         } else text
-        messages.add(AiMsg(true, userText, if (uri != null) name else null))
         input = ""
         pendingUri = null
         pendingName = ""
-        loading = true
-        val snapshot = history.toList()
-        askGemini(context, apiKey, model, SYSTEM_TEXT, snapshot, userText, uri) { result ->
-            loading = false
-            result.onSuccess { reply ->
-                history.add(AiTurn(true, if (uri != null) "[$name] $userText" else userText))
-                history.add(AiTurn(false, reply))
-                val shown = cleanMd(reply)
-                messages.add(AiMsg(false, shown))
-                if (spoken) speak(shown)
-            }.onFailure { e ->
-                messages.add(AiMsg(false, friendlyError(lang, e)))
-            }
-        }
+        ChatStore.send(context, apiKey, model, userText, uri, if (uri != null) name else null, lang, spoken)
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -198,14 +145,12 @@ fun AiChatScreen(lang: String) {
         try {
             voiceLauncher.launch(intent)
         } catch (e: Exception) {
-            messages.add(
-                AiMsg(
-                    false,
-                    tr(
-                        lang,
-                        "Il riconoscimento vocale non è disponibile su questo telefono.",
-                        "Распознавание речи недоступно на этом телефоне."
-                    )
+            ChatStore.note(
+                context,
+                tr(
+                    lang,
+                    "Il riconoscimento vocale non è disponibile su questo telefono.",
+                    "Распознавание речи недоступно на этом телефоне."
                 )
             )
         }
@@ -213,7 +158,7 @@ fun AiChatScreen(lang: String) {
 
     LaunchedEffect(messages.size, loading) {
         val total = messages.size + if (loading) 1 else 0
-        if (total > 0) listState.animateScrollToItem(total - 1)
+        if (total > 0) listState.scrollToItem(total - 1)
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -233,6 +178,17 @@ fun AiChatScreen(lang: String) {
             ) {
                 Orb(Modifier.fillMaxSize())
                 if (loading) PulseRing(Modifier.fillMaxSize())
+            }
+            GlassSurface(Modifier.align(Alignment.TopStart), RoundedCornerShape(18.dp)) {
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = 44.dp)
+                        .clickable { ChatStore.clear(context, greeting) }
+                        .padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    MonoText(tr(lang, "NUOVA", "НОВЫЙ"), size = 11, spacing = 1f)
+                }
             }
             GlassSurface(Modifier.align(Alignment.TopEnd), RoundedCornerShape(18.dp)) {
                 Box(
@@ -267,11 +223,9 @@ fun AiChatScreen(lang: String) {
                     prefs.geminiModel = m
                     model = prefs.geminiModel
                     showKeyCard = false
-                    messages.add(
-                        AiMsg(
-                            false,
-                            tr(lang, "Chiave salvata. Ora puoi scrivermi.", "Ключ сохранён. Теперь можете писать мне.")
-                        )
+                    ChatStore.note(
+                        context,
+                        tr(lang, "Chiave salvata. Ora puoi scrivermi.", "Ключ сохранён. Теперь можете писать мне.")
                     )
                 }
             } else {
