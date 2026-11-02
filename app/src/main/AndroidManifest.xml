@@ -18,6 +18,10 @@
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
+        <package android:name="com.v2ray.ang" />
+        <package android:name="app.hiddify.com" />
+        <package android:name="moe.nb4a" />
+        <package android:name="io.nekohasekai.sfa" />
     </queries>
 
     <application
