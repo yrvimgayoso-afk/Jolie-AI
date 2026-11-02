@@ -6,11 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
+import android.net.VpnService
 import android.net.Uri
 import android.os.Bundle
 import android.provider.CalendarContract
@@ -39,14 +36,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.net.InetSocketAddress
-import java.net.Socket
 import java.util.Locale
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
@@ -115,7 +109,6 @@ fun JolieAppContainer(tts: TextToSpeech?, onLanguageChange: (Locale) -> Unit) {
     var selectedLang by remember { mutableStateOf("RU") }
     val context = LocalContext.current
 
-    // Monitoreo y Auto-Healing real de conectividad para Rusia (Gemini / YouTube bypass)
     LaunchedEffect(vpnActive) {
         while (vpnActive) {
             delay(10000)
