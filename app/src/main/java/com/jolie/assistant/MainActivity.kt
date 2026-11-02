@@ -33,3 +33,23 @@ class MainActivity : ComponentActivity() {
             JolieTheme {
                 var setupDone by remember { mutableStateOf(prefs.isSetupCompleted) }
                 var lang by remember { mutableStateOf(prefs.language) }
+                if (setupDone) {
+                    HomeShell(
+                        lang = lang,
+                        onResetSetup = {
+                            prefs.isSetupCompleted = false
+                            setupDone = false
+                        }
+                    )
+                } else {
+                    SetupWizard(initialLang = lang) { chosen ->
+                        prefs.language = chosen
+                        prefs.isSetupCompleted = true
+                        lang = chosen
+                        setupDone = true
+                    }
+                }
+            }
+        }
+    }
+}
