@@ -19,11 +19,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,8 +33,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
@@ -99,29 +95,6 @@ private fun PulseRing(modifier: Modifier = Modifier) {
             radius = r * 0.2f + r * 0.75f * phase,
             center = center,
             style = Stroke(width = 3.dp.toPx())
-        )
-    }
-}
-
-@Composable
-private fun FieldBox(value: String, hint: String, onChange: (String) -> Unit, secret: Boolean = false) {
-    GlassSurface(Modifier.fillMaxWidth(), RoundedCornerShape(16.dp)) {
-        BasicTextField(
-            value = value,
-            onValueChange = onChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 14.dp),
-            textStyle = TextStyle(color = Color.White, fontSize = 13.sp, fontFamily = FontFamily.Monospace),
-            cursorBrush = SolidColor(Color.White),
-            singleLine = true,
-            visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
-            decorationBox = { inner ->
-                Box {
-                    if (value.isEmpty()) MonoText(hint, size = 13, color = JolieColors.Gray)
-                    inner()
-                }
-            }
         )
     }
 }
@@ -288,51 +261,18 @@ fun AiChatScreen(lang: String) {
                 .padding(top = 8.dp)
         ) {
             if (showKeyCard) {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    GlassSurface(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            MonoText(
-                                tr(lang, "CHIAVE GRATUITA DI GEMINI", "БЕСПЛАТНЫЙ КЛЮЧ GEMINI"),
-                                size = 11,
-                                color = JolieColors.RedSoft,
-                                spacing = 1.5f
-                            )
-                            MonoText(
-                                tr(
-                                    lang,
-                                    "1. Tocca APRI AI STUDIO e crea una chiave gratis.\n2. Copiala e incollala qui sotto.\nIn Russia Gemini funziona solo con una VPN attiva.",
-                                    "1. Нажмите ОТКРЫТЬ AI STUDIO и создайте бесплатный ключ.\n2. Скопируйте и вставьте его ниже.\nВ России Gemini работает только с включённым VPN."
-                                ),
-                                size = 12
-                            )
-                            GlassButton(
-                                tr(lang, "APRI AI STUDIO", "ОТКРЫТЬ AI STUDIO"),
-                                onClick = {
-                                    try {
-                                        context.startActivity(
-                                            Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey"))
-                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        )
-                                    } catch (_: Exception) {
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            FieldBox(apiKey, tr(lang, "Incolla la chiave qui", "Вставьте ключ сюда"), { apiKey = it }, secret = true)
-                            FieldBox(model, "gemini-flash-latest", { model = it })
-                            GlassButton(
-                                tr(lang, "SALVA", "СОХРАНИТЬ"),
-                                onClick = {
-                                    prefs.geminiKey = apiKey
-                                    prefs.geminiModel = model
-                                    model = prefs.geminiModel
-                                    showKeyCard = false
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                filled = true
-                            )
-                        }
-                    }
+                KeyCardAuto(lang, model) { k, m ->
+                    apiKey = k
+                    prefs.geminiKey = k
+                    prefs.geminiModel = m
+                    model = prefs.geminiModel
+                    showKeyCard = false
+                    messages.add(
+                        AiMsg(
+                            false,
+                            tr(lang, "Chiave salvata. Ora puoi scrivermi.", "Ключ сохранён. Теперь можете писать мне.")
+                        )
+                    )
                 }
             } else {
                 LazyColumn(
