@@ -70,11 +70,8 @@ fun HomeShell(lang: String, onResetSetup: () -> Unit) {
                         tr(lang, "TRADUTTORE", "ПЕРЕВОДЧИК"),
                         tr(lang, "Traduzione vocale IT ⇄ RU: in arrivo.", "Голосовой перевод IT ⇄ RU: скоро.")
                     )
-                    HomeTab.FOTO -> ComingSoon(
-                        tr(lang, "FOTO STUDIO", "ФОТО СТУДИЯ"),
-                        tr(lang, "Editor foto: in arrivo.", "Фоторедактор: скоро.")
-                    )
-                    HomeTab.VPN -> VpnHubScreen(lang, onResetSetup)
+                    HomeTab.FOTO -> PhotoStudioScreen(lang)
+                    HomeTab.VPN -> VpnTabScreen(lang, onResetSetup)
                 }
             }
 
