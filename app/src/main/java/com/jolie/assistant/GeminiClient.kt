@@ -36,6 +36,12 @@ class AiTurn(val fromUser: Boolean, val text: String)
 
 class GeminiHttpException(val code: Int, message: String) : Exception(message)
 
+/** Modelli di riserva: se il principale è sovraccarico (503) Jolie prova questi in automatico. */
+private val FALLBACK_MODELS = listOf("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-lite-latest")
+
+private fun isTransient(code: Int): Boolean =
+    code == 429 || code == 500 || code == 502 || code == 503 || code == 504
+
 fun displayName(context: Context, uri: Uri): String {
     var name = "file"
     try {
@@ -48,7 +54,7 @@ fun displayName(context: Context, uri: Uri): String {
     return name
 }
 
-/** Chiede a Gemini in background e restituisce il risultato sul thread principale. */
+/** Chiede a Gemini in background (con modelli di riserva) e restituisce il risultato sul thread principale. */
 fun askGemini(
     context: Context,
     apiKey: String,
@@ -62,7 +68,25 @@ fun askGemini(
     val app = context.applicationContext
     Thread {
         val result = runCatching {
-            callGemini(app, apiKey, model, systemText, history, userText, attachment)
+            val chain = (listOf(model.trim()) + FALLBACK_MODELS).filter { it.isNotEmpty() }.distinct()
+            var lastError: GeminiHttpException? = null
+            for (round in 0..1) {
+                for (m in chain) {
+                    try {
+                        return@runCatching callGemini(app, apiKey, m, systemText, history, userText, attachment)
+                    } catch (e: GeminiHttpException) {
+                        if (!isTransient(e.code) && e.code != 404) throw e
+                        lastError = e
+                    }
+                }
+                if (round == 0) Thread.sleep(2500)
+            }
+            val e = lastError
+            if (e != null && (e.code == 404 || e.code == 429)) throw e
+            throw GeminiHttpException(
+                503,
+                "Gemini è sovraccarico in questo momento, riprova tra poco. / Gemini перегружен, повторите позже."
+            )
         }
         Handler(Looper.getMainLooper()).post { onDone(result) }
     }.start()
@@ -120,7 +144,7 @@ private fun callGemini(
     try {
         conn.requestMethod = "POST"
         conn.connectTimeout = 20000
-        conn.readTimeout = 90000
+        conn.readTimeout = 40000
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "application/json")
         conn.setRequestProperty("x-goog-api-key", apiKey)
