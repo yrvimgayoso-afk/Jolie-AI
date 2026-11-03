@@ -4,11 +4,15 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -85,11 +90,22 @@ fun JolieBackground(modifier: Modifier = Modifier, content: @Composable BoxScope
     )
 }
 
+/**
+ * GERARCHIA VISIVA
+ * 1. Barra principale in basso: vetro, a pillola grande.
+ * 2. Pulsante principale (azione): bianco pieno.
+ * 3. Pulsante secondario: vetro a pillola.
+ * 4. Menu di una schermata (TabStrip): solo testo con sottolineatura rossa.
+ * 5. Opzioni dentro un menu (OptionChip): rettangoli piccoli con angoli poco arrotondati.
+ * 6. Messaggi della chat (BubbleSurface): piatti, rossi (tu) o grigio scuro (Jolie).
+ */
+
 /** "Vetro" simulato: riempimento trasparente + bordo luminoso. */
 @Composable
 fun GlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(20.dp),
+    contentAlignment: Alignment = Alignment.TopStart,
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
@@ -107,6 +123,7 @@ fun GlassSurface(
                 ),
                 shape
             ),
+        contentAlignment = contentAlignment,
         content = content
     )
 }
@@ -132,6 +149,7 @@ fun MonoText(
     )
 }
 
+/** Pulsante grande. filled = true è l'azione principale (bianco pieno). Tutta l'area è cliccabile. */
 @Composable
 fun GlassButton(
     text: String,
@@ -153,11 +171,14 @@ fun GlassButton(
             MonoText(text, size = 12, color = Color.Black, bold = true, spacing = 1f)
         }
     } else {
-        GlassSurface(modifier = modifier, shape = shape) {
+        GlassSurface(
+            modifier = modifier.clickable(onClick = onClick),
+            shape = shape,
+            contentAlignment = Alignment.Center
+        ) {
             Box(
                 modifier = Modifier
                     .heightIn(min = 48.dp)
-                    .clickable(onClick = onClick)
                     .padding(horizontal = 20.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -165,6 +186,115 @@ fun GlassButton(
             }
         }
     }
+}
+
+/** Pulsante piccolo: primary = bianco pieno, altrimenti vetro. Tutta l'area è cliccabile. */
+@Composable
+fun SmallButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, primary: Boolean = false) {
+    val shape = RoundedCornerShape(22.dp)
+    if (primary) {
+        Box(
+            modifier = modifier
+                .heightIn(min = 44.dp)
+                .clip(shape)
+                .background(Color.White)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            MonoText(text, size = 10, color = Color.Black, bold = true, spacing = 1f)
+        }
+    } else {
+        GlassSurface(
+            modifier = modifier.clickable(onClick = onClick),
+            shape = shape,
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .heightIn(min = 44.dp)
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                MonoText(text, size = 10, bold = true, spacing = 1f)
+            }
+        }
+    }
+}
+
+/** Menu di una schermata: solo testo, la voce scelta è bianca con sottolineatura rossa. */
+@Composable
+fun TabStrip(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        labels.forEachIndexed { i, label ->
+            val sel = i == selected
+            Box(
+                modifier = Modifier
+                    .heightIn(min = 44.dp)
+                    .clickable { onSelect(i) }
+                    .padding(horizontal = 12.dp)
+                    .drawBehind {
+                        if (sel) {
+                            drawRect(
+                                color = JolieColors.Red,
+                                topLeft = Offset(0f, size.height - 2.dp.toPx()),
+                                size = Size(size.width, 2.dp.toPx())
+                            )
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                MonoText(
+                    label,
+                    size = 11,
+                    color = if (sel) Color.White else JolieColors.Gray,
+                    bold = sel,
+                    spacing = 1f
+                )
+            }
+        }
+    }
+}
+
+/** Opzione dentro un menu: rettangolo piccolo (angoli poco arrotondati), rosso se scelta. */
+@Composable
+fun OptionChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        modifier = modifier
+            .heightIn(min = 40.dp)
+            .clip(shape)
+            .background(if (selected) JolieColors.Red else Color.White.copy(alpha = 0.06f))
+            .border(1.dp, if (selected) JolieColors.Red else Color.White.copy(alpha = 0.22f), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        MonoText(text, size = 11, bold = selected, spacing = 0.5f)
+    }
+}
+
+/** Piccola etichetta grigia che raggruppa delle opzioni. */
+@Composable
+fun SectionLabel(text: String) {
+    MonoText(text, size = 10, color = JolieColors.Gray, spacing = 1.5f)
+}
+
+/** Messaggio della chat: rosso pieno (tu) o grigio scuro piatto (Jolie). Niente vetro, così non somiglia ai pulsanti. */
+@Composable
+fun BubbleSurface(fromUser: Boolean, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+    val shape = if (fromUser) {
+        RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)
+    } else {
+        RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp)
+    }
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(if (fromUser) JolieColors.Red else Color(0xFF1C1C1C))
+            .border(1.dp, if (fromUser) Color.Transparent else Color.White.copy(alpha = 0.10f), shape),
+        content = content
+    )
 }
 
 /** L'orbe a puntini di Jolie. */
