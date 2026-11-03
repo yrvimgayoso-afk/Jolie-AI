@@ -444,4 +444,62 @@ fun PhotoStudioScreen(lang: String) {
                         Slider(
                             value = brush,
                             onValueChange = { brush = it },
-                            valu
+                            valueRange = 0f..1f,
+                            modifier = Modifier.weight(1f),
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color.White,
+                                activeTrackColor = JolieColors.Red,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.25f)
+                            )
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Chip(tr(lang, "CANCELLA", "СТЕРЕТЬ"), true) { applyErase() }
+                        Chip(tr(lang, "ANNULLA TRATTO", "СБРОС МАЗКА"), false) { strokes.clear() }
+                    }
+                }
+                else -> {
+                    MonoText(
+                        tr(
+                            lang,
+                            "Descrivi la modifica (meglio in inglese). L’IA gira sul web: può essere lenta.",
+                            "Опишите правку (лучше по-английски). ИИ работает в сети: может быть медленно."
+                        ),
+                        size = 11,
+                        color = JolieColors.Gray
+                    )
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Chip(tr(lang, "SFONDO", "ФОН"), false) {
+                            aiPrompt = "Remove the background and replace it with a clean white background. Keep the subject exactly the same."
+                        }
+                        Chip(tr(lang, "LUCE", "СВЕТ"), false) {
+                            aiPrompt = "Improve the lighting and colors in a natural way. Do not change the content."
+                        }
+                        Chip(tr(lang, "PERSONE", "ЛЮДИ"), false) {
+                            aiPrompt = "Remove the people in the background. Keep everything else exactly the same."
+                        }
+                    }
+                    PhotoField(aiPrompt, tr(lang, "Es. rendi il cielo più blu", "Напр. сделай небо синее"), { aiPrompt = it })
+                    PhotoField(aiModel, IMAGE_MODELS[0], { aiModel = it })
+                    GlassButton(
+                        tr(lang, "MODIFICA CON IA", "ИЗМЕНИТЬ С ИИ"),
+                        onClick = { runAi() },
+                        modifier = Modifier.fillMaxWidth(),
+                        filled = true
+                    )
+                    if (busy) {
+                        GlassButton(
+                            tr(lang, "GUARDA UN VIDEO INTANTO", "ПОСМОТРЕТЬ ВИДЕО ПОКА ЖДЁТЕ"),
+                            onClick = { openYoutube(context) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+            if (status.isNotEmpty()) MonoText(status, size = 11, color = JolieColors.RedSoft)
+        }
+    }
+}
