@@ -56,7 +56,16 @@ fun HomeShell(lang: String, onResetSetup: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 MonoText("JOLIE", size = 26, bold = true, spacing = 4f)
-                VpnPill(lang)
+                // Toccando l'indicatore si apre la scheda VPN
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .clickable { tab = HomeTab.VPN },
+                    contentAlignment = Alignment.Center
+                ) {
+                    VpnPill(lang)
+                }
             }
 
             Box(Modifier.weight(1f).fillMaxWidth()) {
