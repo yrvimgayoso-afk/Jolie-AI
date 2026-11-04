@@ -9,7 +9,7 @@ import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
-import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 
 /** Chiave e modello Gemini, salvati solo sul telefono. */
@@ -36,8 +36,16 @@ class AiTurn(val fromUser: Boolean, val text: String)
 
 class GeminiHttpException(val code: Int, message: String) : Exception(message)
 
-/** Modelli di riserva: se il principale è sovraccarico (503) Jolie prova questi in automatico. */
-private val FALLBACK_MODELS = listOf("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-lite-latest")
+/** Ordine dei modelli: se uno è lento, sovraccarico o assente Jolie passa al successivo. */
+private fun modelChain(primary: String): List<String> {
+    val p = primary.trim()
+    val list = if (p.isEmpty() || p == AiPrefs.DEFAULT_MODEL) {
+        listOf("gemini-2.5-flash", AiPrefs.DEFAULT_MODEL, "gemini-2.5-flash-lite")
+    } else {
+        listOf(p, "gemini-2.5-flash", "gemini-flash-lite-latest")
+    }
+    return list.distinct()
+}
 
 private fun isTransient(code: Int): Boolean =
     code == 429 || code == 500 || code == 502 || code == 503 || code == 504
@@ -54,7 +62,7 @@ fun displayName(context: Context, uri: Uri): String {
     return name
 }
 
-/** Chiede a Gemini in background (con modelli di riserva) e restituisce il risultato sul thread principale. */
+/** Chiede a Gemini in background (con modelli di riserva, max 50 secondi) e risponde sul thread principale. */
 fun askGemini(
     context: Context,
     apiKey: String,
@@ -68,24 +76,34 @@ fun askGemini(
     val app = context.applicationContext
     Thread {
         val result = runCatching {
-            val chain = (listOf(model.trim()) + FALLBACK_MODELS).filter { it.isNotEmpty() }.distinct()
-            var lastError: GeminiHttpException? = null
+            val chain = modelChain(model)
+            val attempts = ArrayList<String>()
+            var lastHttp: GeminiHttpException? = null
+            val deadline = System.currentTimeMillis() + 50000
             for (round in 0..1) {
                 for (m in chain) {
+                    val remaining = (deadline - System.currentTimeMillis()).toInt()
+                    if (remaining < 4000) break
                     try {
-                        return@runCatching callGemini(app, apiKey, m, systemText, history, userText, attachment)
+                        return@runCatching callGemini(
+                            app, apiKey, m, systemText, history, userText, attachment, minOf(remaining, 20000)
+                        )
                     } catch (e: GeminiHttpException) {
                         if (!isTransient(e.code) && e.code != 404) throw e
-                        lastError = e
+                        lastHttp = e
+                        attempts.add(m.removePrefix("gemini-") + ":" + e.code)
+                    } catch (e: SocketTimeoutException) {
+                        attempts.add(m.removePrefix("gemini-") + ":timeout")
                     }
                 }
-                if (round == 0) Thread.sleep(2500)
+                if (deadline - System.currentTimeMillis() < 6000) break
+                if (round == 0) Thread.sleep(1500)
             }
-            val e = lastError
-            if (e != null && (e.code == 404 || e.code == 429)) throw e
+            val e = lastHttp
+            if (e != null && attempts.all { it.endsWith(":404") || it.endsWith(":429") }) throw e
             throw GeminiHttpException(
                 503,
-                "Gemini è sovraccarico in questo momento, riprova tra poco. / Gemini перегружен, повторите позже."
+                "Gemini lento o sovraccarico. / Gemini медленный или перегружен. " + attempts.joinToString(" ")
             )
         }
         Handler(Looper.getMainLooper()).post { onDone(result) }
@@ -99,7 +117,8 @@ private fun callGemini(
     systemText: String,
     history: List<AiTurn>,
     userText: String,
-    attachment: Uri?
+    attachment: Uri?,
+    timeoutMs: Int
 ): String {
     val contents = JSONArray()
     for (t in history) {
@@ -140,11 +159,11 @@ private fun callGemini(
 
     val cleanModel = model.trim().removePrefix("models/")
     val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$cleanModel:generateContent")
-    val conn = url.openConnection() as HttpURLConnection
+    val conn = JolieProxy.openConnection(url)
     try {
         conn.requestMethod = "POST"
-        conn.connectTimeout = 20000
-        conn.readTimeout = 40000
+        conn.connectTimeout = 8000
+        conn.readTimeout = timeoutMs
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "application/json")
         conn.setRequestProperty("x-goog-api-key", apiKey)
