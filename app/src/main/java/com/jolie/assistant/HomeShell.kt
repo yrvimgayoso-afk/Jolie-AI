@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 enum class HomeTab { CHAT, AGENDA, TRAD, FOTO, VPN }
@@ -37,7 +38,12 @@ private fun tabLabel(lang: String, tab: HomeTab): String = when (tab) {
 
 @Composable
 fun HomeShell(lang: String, onResetSetup: () -> Unit) {
+    val context = LocalContext.current
     var tab by remember { mutableStateOf(HomeTab.CHAT) }
+    remember {
+        JolieProxy.install()
+        true
+    }
 
     JolieBackground {
         Column(
@@ -56,16 +62,8 @@ fun HomeShell(lang: String, onResetSetup: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 MonoText("JOLIE", size = 26, bold = true, spacing = 4f)
-                // Toccando l'indicatore si apre la scheda VPN
-                Box(
-                    modifier = Modifier
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .clickable { tab = HomeTab.VPN },
-                    contentAlignment = Alignment.Center
-                ) {
-                    VpnPill(lang)
-                }
+                // Tocando el indicador se enciende o apaga la VPN automática
+                JolieVpnPill(lang) { JolieProxy.toggle(context, lang) }
             }
 
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -80,7 +78,7 @@ fun HomeShell(lang: String, onResetSetup: () -> Unit) {
                         tr(lang, "Traduzione vocale IT ⇄ RU: in arrivo.", "Голосовой перевод IT ⇄ RU: скоро.")
                     )
                     HomeTab.FOTO -> PhotoStudioScreen(lang)
-                    HomeTab.VPN -> VpnTabScreen(lang, onResetSetup)
+                    HomeTab.VPN -> VpnAutoScreen(lang, onResetSetup)
                 }
             }
 
