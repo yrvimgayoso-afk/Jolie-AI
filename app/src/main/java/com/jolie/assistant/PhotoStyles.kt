@@ -8,7 +8,7 @@ import kotlin.random.Random
 /** group: 0 = pittura, 1 = pixel art, 2 = pop art. aiPrompt serve quando lo stile non si può fare in locale. */
 class StyleDef(val id: String, val itName: String, val ruName: String, val group: Int, val aiPrompt: String)
 
-val STYLES = listOf(
+val STYLES = ANIME_STYLES + listOf(
     StyleDef(
         "watercolor", "ACQUERELLO", "АКВАРЕЛЬ", 0,
         "Transform this photo into a delicate watercolor painting with soft washes, visible paper texture and gentle color bleeding. Keep the composition and the people recognizable."
@@ -53,6 +53,8 @@ fun applyLocalStyle(src: Bitmap, id: String): Bitmap? {
         "pixel16" -> pixelArt(src, 192, 6)
         "pop60" -> popArt(src, false)
         "pop80" -> popArt(src, true)
+        "anime" -> animeStyle(src, false)
+        "manga" -> animeStyle(src, true)
         else -> null
     }
 }
