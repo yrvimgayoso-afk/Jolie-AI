@@ -74,8 +74,10 @@ val fetchXray by tasks.registering {
         if (!target.exists() || target.length() < 1000000L) {
             try {
                 target.parentFile.mkdirs()
-                java.net.URL("https://github.com/2dust/AndroidLibXrayLite/releases/latest/download/libv2ray.aar")
-                    .openStream().use { input -> target.outputStream().use { out -> input.copyTo(out) } }
+                uri("https://github.com/2dust/AndroidLibXrayLite/releases/latest/download/libv2ray.aar")
+                    .toURL()
+                    .openStream()
+                    .use { input -> target.outputStream().use { out -> input.copyTo(out) } }
             } catch (e: Exception) {
                 logger.warn("libv2ray.aar non scaricato: " + e.message)
                 target.delete()
