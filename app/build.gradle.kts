@@ -67,3 +67,23 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
 }
+// ---- Motore VPN (Xray): scarica libv2ray.aar se manca ----
+val fetchXray by tasks.registering {
+    doLast {
+        val target = file("libs/libv2ray.aar")
+        if (!target.exists() || target.length() < 1000000L) {
+            try {
+                target.parentFile.mkdirs()
+                java.net.URL("https://github.com/2dust/AndroidLibXrayLite/releases/latest/download/libv2ray.aar")
+                    .openStream().use { input -> target.outputStream().use { out -> input.copyTo(out) } }
+            } catch (e: Exception) {
+                logger.warn("libv2ray.aar non scaricato: " + e.message)
+                target.delete()
+            }
+        }
+    }
+}
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(fetchXray) }
+dependencies {
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
+}
