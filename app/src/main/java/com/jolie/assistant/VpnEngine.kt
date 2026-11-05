@@ -248,8 +248,7 @@ object XrayEngine {
             if (types.size == 1) {
                 startM.invoke(ctl, config)
             } else if (types.size == 2) {
-                val second: Any = if (types[1] == java.lang.Long.TYPE) 0L else 0
-                startM.invoke(ctl, config, second)
+            if (types[1] == java.lang.Long.TYPE) startM.invoke(ctl, config, 0L) else startM.invoke(ctl, config, 0)
             } else {
                 throw IllegalStateException("startLoop con " + types.size + " parametri")
             }
