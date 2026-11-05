@@ -36,19 +36,89 @@ class AiTurn(val fromUser: Boolean, val text: String)
 
 class GeminiHttpException(val code: Int, message: String) : Exception(message)
 
-/** Ordine dei modelli: se uno è lento, sovraccarico o assente Jolie passa al successivo. */
-private fun modelChain(primary: String): List<String> {
-    val p = primary.trim()
-    val list = if (p.isEmpty() || p == AiPrefs.DEFAULT_MODEL) {
-        listOf("gemini-2.5-flash", AiPrefs.DEFAULT_MODEL, "gemini-2.5-flash-lite")
-    } else {
-        listOf(p, "gemini-2.5-flash", "gemini-flash-lite-latest")
-    }
-    return list.distinct()
-}
-
 private fun isTransient(code: Int): Boolean =
     code == 429 || code == 500 || code == 502 || code == 503 || code == 504
+
+private fun isChatModel(n: String): Boolean {
+    if (!n.startsWith("gemini")) return false
+    val bad = listOf(
+        "image", "tts", "audio", "live", "embed", "imagen", "veo", "aqa",
+        "learnlm", "robotics", "computer", "native", "customtools"
+    )
+    return bad.none { n.contains(it) }
+}
+
+/** Più basso = provato prima: i modelli "lite" stabili sono i meno affollati. */
+private fun modelRank(n: String): Int {
+    val lite = n.contains("lite")
+    val flash = n.contains("flash")
+    val pro = n.contains("pro")
+    val preview = n.contains("preview") || n.contains("exp")
+    return when {
+        lite && !preview -> 0
+        flash && !preview && !n.endsWith("-latest") -> 1
+        lite -> 2
+        flash && !preview -> 3
+        flash -> 4
+        pro -> 6
+        else -> 8
+    }
+}
+
+/** Chiede a Google quali modelli esistono davvero per questa chiave (cache di 6 ore). */
+private fun listChatModels(app: Context, apiKey: String): List<String> {
+    val sp = app.getSharedPreferences("jolie_ai", Context.MODE_PRIVATE)
+    val cached = sp.getString("models_cache", "") ?: ""
+    val age = System.currentTimeMillis() - sp.getLong("models_time", 0L)
+    if (cached.isNotEmpty() && age < 6L * 3600L * 1000L) return cached.split(",")
+    val conn = JolieProxy.openConnection(URL("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200"))
+    try {
+        conn.connectTimeout = 8000
+        conn.readTimeout = 8000
+        conn.setRequestProperty("x-goog-api-key", apiKey)
+        if (conn.responseCode !in 200..299) return emptyList()
+        val root = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+        val arr = root.optJSONArray("models") ?: return emptyList()
+        val out = ArrayList<String>()
+        for (i in 0 until arr.length()) {
+            val m = arr.getJSONObject(i)
+            val name = m.optString("name").removePrefix("models/")
+            val methods = m.optJSONArray("supportedGenerationMethods")
+            var ok = false
+            if (methods != null) {
+                for (j in 0 until methods.length()) {
+                    if (methods.getString(j) == "generateContent") ok = true
+                }
+            }
+            if (ok && isChatModel(name)) out.add(name)
+        }
+        sp.edit().putString("models_cache", out.joinToString(",")).putLong("models_time", System.currentTimeMillis()).apply()
+        return out
+    } catch (_: Exception) {
+        return emptyList()
+    } finally {
+        conn.disconnect()
+    }
+}
+
+/** Ordine dei modelli: l'ultimo che ha funzionato, poi quelli esistenti dal meno al più affollato. */
+private fun modelChain(app: Context, apiKey: String, primary: String): List<String> {
+    val sp = app.getSharedPreferences("jolie_ai", Context.MODE_PRIVATE)
+    val lastOk = sp.getString("last_ok", "") ?: ""
+    val available = listChatModels(app, apiKey)
+    val out = ArrayList<String>()
+    if (available.isEmpty()) {
+        if (lastOk.isNotEmpty()) out.add(lastOk)
+        if (primary.isNotEmpty() && primary != AiPrefs.DEFAULT_MODEL) out.add(primary)
+        out.add("gemini-flash-lite-latest")
+        out.add(AiPrefs.DEFAULT_MODEL)
+    } else {
+        if (lastOk.isNotEmpty() && available.contains(lastOk)) out.add(lastOk)
+        if (primary.isNotEmpty() && primary != AiPrefs.DEFAULT_MODEL && available.contains(primary)) out.add(primary)
+        out.addAll(available.sortedWith(compareBy<String>({ modelRank(it) }, { it })))
+    }
+    return out.distinct().take(4)
+}
 
 fun displayName(context: Context, uri: Uri): String {
     var name = "file"
@@ -62,7 +132,7 @@ fun displayName(context: Context, uri: Uri): String {
     return name
 }
 
-/** Chiede a Gemini in background (con modelli di riserva, max 50 secondi) e risponde sul thread principale. */
+/** Chiede a Gemini in background (modelli reali, max 50 secondi) e risponde sul thread principale. */
 fun askGemini(
     context: Context,
     apiKey: String,
@@ -76,18 +146,21 @@ fun askGemini(
     val app = context.applicationContext
     Thread {
         val result = runCatching {
-            val chain = modelChain(model)
+            val deadline = System.currentTimeMillis() + 50000
+            val chain = modelChain(app, apiKey, model.trim())
             val attempts = ArrayList<String>()
             var lastHttp: GeminiHttpException? = null
-            val deadline = System.currentTimeMillis() + 50000
             for (round in 0..1) {
                 for (m in chain) {
                     val remaining = (deadline - System.currentTimeMillis()).toInt()
                     if (remaining < 4000) break
                     try {
-                        return@runCatching callGemini(
+                        val reply = callGemini(
                             app, apiKey, m, systemText, history, userText, attachment, minOf(remaining, 20000)
                         )
+                        app.getSharedPreferences("jolie_ai", Context.MODE_PRIVATE)
+                            .edit().putString("last_ok", m).apply()
+                        return@runCatching reply
                     } catch (e: GeminiHttpException) {
                         if (!isTransient(e.code) && e.code != 404) throw e
                         lastHttp = e
