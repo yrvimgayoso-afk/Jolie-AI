@@ -4,10 +4,10 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import kotlin.math.abs
 
-/** Estilos anime y manga (grupo 2, junto al pop art). */
+/** Estilos anime y manga (grupo 2, junto al pop art). ANIME usa IA gratuita en el teléfono. */
 val ANIME_STYLES = listOf(
     StyleDef(
-        "anime", "ANIME", "АНИМЕ", 2,
+        "anime", "ANIME IA", "АНИМЕ ИИ", 2,
         "Convert this photo into a clean anime illustration with flat cel-shaded colors, soft highlights and thin dark outlines. Keep the person recognizable."
     ),
     StyleDef(
@@ -18,8 +18,17 @@ val ANIME_STYLES = listOf(
 
 private fun cel(v: Int): Int = Math.round(v / 51f) * 51
 
-/** Anime: colores planos por niveles, saturados, con contornos finos. Manga: blanco y negro con tramas de puntos. */
+/** Anime: primero IA en el teléfono (AnimeGANv2); si falla, efecto local. Manga: siempre local. */
 fun animeStyle(src: Bitmap, manga: Boolean): Bitmap {
+    if (!manga) {
+        val ai = AnimeAi.convert(src)
+        if (ai != null) return ai
+    }
+    return localAnime(src, manga)
+}
+
+/** Efecto local (sin IA): colores planos por niveles con contornos, o tramas de puntos en blanco y negro. */
+private fun localAnime(src: Bitmap, manga: Boolean): Bitmap {
     val base = scaleDown(src, 1100)
     val w = base.width
     val h = base.height
