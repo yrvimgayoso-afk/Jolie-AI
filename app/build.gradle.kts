@@ -89,3 +89,6 @@ tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(fetchXray) }
 dependencies {
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
 }
+dependencies {
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.3")
+}
