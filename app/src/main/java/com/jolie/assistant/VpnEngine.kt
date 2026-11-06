@@ -231,7 +231,7 @@ object XrayEngine {
         try {
             val lib = Class.forName(LIB)
             lib.methods.firstOrNull { it.name == "initCoreEnv" && it.parameterTypes.size == 2 }
-                ?.invoke(null, context.filesDir.absolutePath, "jolie")
+                ?.invoke(null, context.filesDir.absolutePath, "JolieAppKey2026JolieAppKey2026JolieAppKey2A")
             val cb = Class.forName(CB)
             val handler = Proxy.newProxyInstance(cb.classLoader, arrayOf(cb), InvocationHandler { _, method, _ ->
                 when (method.returnType) {
