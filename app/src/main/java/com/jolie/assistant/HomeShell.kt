@@ -69,7 +69,7 @@ fun HomeShell(lang: String, onResetSetup: () -> Unit) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (tab) {
                     HomeTab.CHAT -> AiChatScreen(lang)
-                    HomeTab.AGENDA -> ComingSoon(
+                    HomeTab.AGENDA -> AgendaScreen(lang,
                         tr(lang, "AGENDA", "ПЛАН"),
                         tr(lang, "Agenda intelligente a voce: in arrivo.", "Умный календарь с голосом: скоро.")
                     )
