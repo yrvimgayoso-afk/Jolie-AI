@@ -160,7 +160,7 @@ object ChatStore {
             result.onSuccess { reply ->
                 history.add(AiTurn(true, if (attachmentName != null) "[$attachmentName] $userText" else userText))
                 history.add(AiTurn(false, reply))
-                val shown = cleanMd(reply)
+                val shown = ChatExtras.process(app, cleanMd(reply))
                 messages.add(AiMsg(false, shown))
                 if (spoken) speaker?.invoke(shown)
             }.onFailure { e ->
