@@ -24,7 +24,10 @@ object AnimeAi {
     var lastError = ""
 
     private const val MODEL_FILE = "AnimeGANv2_Hayao.onnx"
-    private val URLS = listOf(
+        private val URLS = listOf(
+        "https://huggingface.co/vumichien/AnimeGANv2_Hayao/resolve/main/AnimeGANv2_Hayao.onnx",
+        "https://hf-mirror.com/vumichien/AnimeGANv2_Hayao/resolve/main/AnimeGANv2_Hayao.onnx",
+        "https://huggingface.co/frankminors123/AnimeGAN_Hayao_Style_ONNX/resolve/main/generator_hayao.onnx",
         "https://github.com/TachibanaYoshino/AnimeGANv2/raw/master/pb_and_onnx_model/AnimeGANv2_Hayao.onnx",
         "https://cdn.jsdelivr.net/gh/TachibanaYoshino/AnimeGANv2@master/pb_and_onnx_model/AnimeGANv2_Hayao.onnx",
         "https://raw.githubusercontent.com/TachibanaYoshino/AnimeGANv2/master/pb_and_onnx_model/AnimeGANv2_Hayao.onnx"
