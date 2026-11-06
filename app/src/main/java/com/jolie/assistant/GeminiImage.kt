@@ -31,6 +31,7 @@ fun editImageWithGemini(
     main.postDelayed(timeout, 150000)
     Thread {
         val result = runCatching {
+                        LocalAi.tryEdit(bitmap, prompt)?.let { return@runCatching it }
             val chain = (listOf(model.trim()) + IMAGE_MODELS).filter { it.isNotEmpty() }.distinct()
             var lastError: GeminiHttpException? = null
             for (round in 0..1) {
