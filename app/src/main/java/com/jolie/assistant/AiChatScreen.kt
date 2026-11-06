@@ -249,6 +249,7 @@ fun AiChatScreen(lang: String) {
                                         )
                                     }
                                     MonoText(m.text)
+                                    ChatImageStrip(m.text)
                                 }
                             }
                         }
