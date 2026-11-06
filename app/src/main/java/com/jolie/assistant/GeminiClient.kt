@@ -146,6 +146,7 @@ fun askGemini(
     val app = context.applicationContext
     Thread {
         val result = runCatching {
+            val systemText = systemText + ChatExtras.systemExtra(app)
             val deadline = System.currentTimeMillis() + 50000
             val chain = modelChain(app, apiKey, model.trim())
             val attempts = ArrayList<String>()
