@@ -148,7 +148,7 @@ private fun shadowsocksOutbound(link: String): JSONObject? {
     return outbound("shadowsocks", JSONObject().put("servers", JSONArray().put(server)), null)
 }
 
-/** Trasforma un link (vless, vmess, trojan, ss) nella configurazione completa di Xray, con proxy locale SOCKS. */
+/** Trasforma un link (vless, vmess, trojan, ss) nella configurazione completa di Xray (proxy SOCKS locale e, se c'è, il tunnel). */
 fun buildXrayConfig(link: String): String? {
     val proto = link.substringBefore("://", "").lowercase()
     val out0 = try {
@@ -170,11 +170,15 @@ fun buildXrayConfig(link: String): String? {
         .put("protocol", "socks")
         .put("settings", JSONObject().put("auth", "noauth").put("udp", true))
         .put("sniffing", JSONObject().put("enabled", true).put("destOverride", JSONArray().put("http").put("tls")))
+    val outbounds = JSONArray()
+        .put(out)
+        .put(JSONObject().put("tag", "direct").put("protocol", "freedom"))
+    val dns = JSONObject().put("servers", JSONArray().put("1.1.1.1").put("8.8.8.8"))
     val cfg = JSONObject()
-        .put("log", JSONObject().put("loglevel", "warning"))
-        .put("inbounds", TunState.inbounds(inbound)
-        .put("outbounds", JSONArray().put(out).put(JSONObject().put("tag", "direct").put("protocol", "freedom")))
-        .put("dns", JSONObject().put("servers", JSONArray().put("1.1.1.1").put("8.8.8.8")))
+    cfg.put("log", JSONObject().put("loglevel", "warning"))
+    cfg.put("inbounds", TunState.inbounds(inbound))
+    cfg.put("outbounds", outbounds)
+    cfg.put("dns", dns)
     return cfg.toString()
 }
 
@@ -248,7 +252,7 @@ object XrayEngine {
             if (types.size == 1) {
                 startM.invoke(ctl, config)
             } else if (types.size == 2) {
-            if (types[1] == java.lang.Long.TYPE) startM.invoke(ctl, config, TunState.fd.toLong()) else startM.invoke(ctl, config, TunState.fd)
+                if (types[1] == java.lang.Long.TYPE) startM.invoke(ctl, config, TunState.fd.toLong()) else startM.invoke(ctl, config, TunState.fd)
             } else {
                 throw IllegalStateException("startLoop con " + types.size + " parametri")
             }
