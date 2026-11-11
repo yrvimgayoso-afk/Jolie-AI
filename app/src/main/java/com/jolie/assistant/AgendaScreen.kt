@@ -56,11 +56,12 @@ private fun AgendaField(value: String, hint: String, onChange: (String) -> Unit)
     }
 }
 
-/** Agenda real: lee el calendario del teléfono, y permite añadir y borrar citas. */
+/** Agenda real: calendario del teléfono (sincronizado con Google Calendar), día o semana, añadir, borrar, exportar. */
 @Composable
 fun AgendaScreen(lang: String, unusedTitle: String = "", unusedText: String = "") {
     val context = LocalContext.current
     var day by remember { mutableStateOf(startOfDay(System.currentTimeMillis())) }
+    var week by remember { mutableStateOf(false) }
     var tick by remember { mutableStateOf(0) }
     var granted by remember { mutableStateOf(CalendarOps.canRead(context) && CalendarOps.canWrite(context)) }
     var showForm by remember { mutableStateOf(false) }
@@ -75,8 +76,10 @@ fun AgendaScreen(lang: String, unusedTitle: String = "", unusedText: String = ""
     }
 
     val locale = if (lang == "RU") Locale("ru") else Locale.ITALIAN
-    val events = remember(day, tick, granted) { CalendarOps.events(context, day, day + 86400000L) }
+    val span = if (week) 7L else 1L
+    val events = remember(day, tick, granted, week) { CalendarOps.events(context, day, day + span * 86400000L) }
     val dayText = SimpleDateFormat("EEEE d MMMM", locale).format(Date(day)).uppercase(locale)
+    val dayFmt = SimpleDateFormat("EEE d MMM", locale)
     val timeFmt = SimpleDateFormat("HH:mm", locale)
 
     fun save() {
@@ -92,7 +95,7 @@ fun AgendaScreen(lang: String, unusedTitle: String = "", unusedText: String = ""
             return
         }
         val start = day + h * 3600000L + mi * 60000L
-        if (CalendarOps.add(context, title.trim(), start, minutes)) {
+        if (CalendarExport.add(context, title.trim(), start, minutes)) {
             title = ""
             time = ""
             showForm = false
@@ -111,11 +114,11 @@ fun AgendaScreen(lang: String, unusedTitle: String = "", unusedText: String = ""
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SmallButton("<", { day -= 86400000L }, Modifier.width(52.dp))
+            SmallButton("<", { day -= span * 86400000L }, Modifier.width(52.dp))
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 MonoText(dayText, size = 12, bold = true, spacing = 1f)
             }
-            SmallButton(">", { day += 86400000L }, Modifier.width(52.dp))
+            SmallButton(">", { day += span * 86400000L }, Modifier.width(52.dp))
         }
         Row(
             modifier = Modifier
@@ -125,6 +128,24 @@ fun AgendaScreen(lang: String, unusedTitle: String = "", unusedText: String = ""
         ) {
             SmallButton(tr(lang, "OGGI", "СЕГОДНЯ"), { day = startOfDay(System.currentTimeMillis()) }, Modifier.weight(1f))
             SmallButton(tr(lang, "NUOVO", "НОВОЕ"), { showForm = !showForm }, Modifier.weight(1f), primary = true)
+            SmallButton(tr(lang, "ESPORTA", "ЭКСПОРТ"), {
+                val result = CalendarExport.exportAndOpen(context, events)
+                status = when {
+                    result.startsWith("ok:") -> tr(lang, "Salvato in Download: ", "Сохранено в Download: ") + result.removePrefix("ok:")
+                    result == "empty" -> tr(lang, "Niente da esportare in questo periodo.", "В этом периоде нечего экспортировать.")
+                    result == "sdk" -> tr(lang, "Esportazione non supportata su questo Android.", "Экспорт не поддерживается на этом Android.")
+                    else -> tr(lang, "Esportazione non riuscita.", "Не удалось экспортировать.")
+                }
+            }, Modifier.weight(1f))
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OptionChip(tr(lang, "GIORNO", "ДЕНЬ"), !week, { week = false })
+            OptionChip(tr(lang, "SETTIMANA", "НЕДЕЛЯ"), week, { week = true })
         }
 
         Column(
@@ -163,6 +184,11 @@ fun AgendaScreen(lang: String, unusedTitle: String = "", unusedText: String = ""
                                 OptionChip(m.toString() + " min", minutes == m, { minutes = m })
                             }
                         }
+                        MonoText(
+                            tr(lang, "Va nel calendario Google, con avviso 15 minuti prima.", "Сохраняется в календарь Google с напоминанием за 15 минут."),
+                            size = 10,
+                            color = JolieColors.Gray
+                        )
                         GlassButton(tr(lang, "SALVA", "СОХРАНИТЬ"), onClick = { save() }, modifier = Modifier.fillMaxWidth(), filled = true)
                     }
                 }
@@ -172,7 +198,7 @@ fun AgendaScreen(lang: String, unusedTitle: String = "", unusedText: String = ""
             if (granted) {
                 MonoText(
                     if (events.isEmpty()) {
-                        tr(lang, "Nessun impegno in questo giorno.", "В этот день ничего нет.")
+                        tr(lang, "Nessun impegno in questo periodo.", "В этом периоде ничего нет.")
                     } else {
                         tr(lang, events.size.toString() + " impegni", events.size.toString() + " событий")
                     },
@@ -180,7 +206,13 @@ fun AgendaScreen(lang: String, unusedTitle: String = "", unusedText: String = ""
                     color = JolieColors.Gray
                 )
             }
+            var prevDay = ""
             events.forEach { e ->
+                val d = dayFmt.format(Date(e.begin))
+                if (week && d != prevDay) {
+                    prevDay = d
+                    SectionLabel(d.uppercase(locale))
+                }
                 GlassSurface(Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier
@@ -202,7 +234,15 @@ fun AgendaScreen(lang: String, unusedTitle: String = "", unusedText: String = ""
                         }
                         Box(
                             Modifier
-                                .size(48.dp)
+                                .size(44.dp)
+                                .clickable { CalendarExport.openEvent(context, e.id) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("↗", color = Color.White, fontSize = 16.sp)
+                        }
+                        Box(
+                            Modifier
+                                .size(44.dp)
                                 .clickable {
                                     CalendarOps.delete(context, e.id)
                                     tick++
