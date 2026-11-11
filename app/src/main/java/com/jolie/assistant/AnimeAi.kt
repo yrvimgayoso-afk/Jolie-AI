@@ -23,8 +23,10 @@ object AnimeAi {
     @Volatile
     var lastError = ""
 
-    private const val MODEL_FILE = "AnimeGANv2_Hayao.onnx"
+    private const val MODEL_FILE = "AnimeGANv2_Paprika.onnx", y debajo de private val URLS = listOf(
+        
         private val URLS = listOf(
+        "https://huggingface.co/vumichien/AnimeGANv2_Paprika/resolve/main/AnimeGANv2_Paprika.onnx",
         "https://huggingface.co/vumichien/AnimeGANv2_Hayao/resolve/main/AnimeGANv2_Hayao.onnx",
         "https://hf-mirror.com/vumichien/AnimeGANv2_Hayao/resolve/main/AnimeGANv2_Hayao.onnx",
         "https://huggingface.co/frankminors123/AnimeGAN_Hayao_Style_ONNX/resolve/main/generator_hayao.onnx",
