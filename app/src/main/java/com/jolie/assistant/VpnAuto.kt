@@ -35,6 +35,7 @@ private val AMBER = Color(0xFFFFC107)
 /** Indicador de arriba: tocarlo enciende o apaga la VPN automática. */
 @Composable
 fun JolieVpnPill(lang: String, onClick: () -> Unit) {
+    VpnPermissionHost()
     val st = JolieProxy.state
     val label = when (st) {
         JolieProxy.State.OFF -> tr(lang, "VPN SPENTA", "VPN ВЫКЛ.")
@@ -143,12 +144,22 @@ private fun copyText(context: Context, text: String) {
     }
 }
 
+private fun pasteText(context: Context): String =
+    try {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = cm.primaryClip
+        if (clip == null || clip.itemCount == 0) "" else clip.getItemAt(0).coerceToText(context)?.toString() ?: ""
+    } catch (_: Exception) {
+        ""
+    }
+
 @Composable
 private fun AutoPage(lang: String) {
     val context = LocalContext.current
     var engineOk by remember { mutableStateOf(XrayEngine.available()) }
     var probe by remember { mutableStateOf("") }
     var copied by remember { mutableStateOf(false) }
+    var cfgStatus by remember { mutableStateOf("") }
     val st = JolieProxy.state
 
     Column(
@@ -170,24 +181,43 @@ private fun AutoPage(lang: String) {
             bold = true,
             spacing = 2f
         )
-        if (JolieProxy.message.isNotEmpty()) {
-            MonoText(JolieProxy.message, size = 12, color = JolieColors.Gray)
+        val msg = if (st == JolieProxy.State.CONNECTED && VpnTun.active) {
+            tr(lang, "Connesso. Il tunnel è attivo per le app scelte.", "Подключено. Туннель активен для выбранных приложений.")
+        } else {
+            JolieProxy.message
         }
+        if (msg.isNotEmpty()) MonoText(msg, size = 12, color = JolieColors.Gray)
         if (JolieProxy.nodeName.isNotEmpty()) {
             MonoText(tr(lang, "Nodo: ", "Узел: ") + JolieProxy.nodeName.take(36), size = 11, color = JolieColors.Gray)
         }
 
+        VpnAppsCard(lang)
+
         GlassSurface(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel(tr(lang, "COSA PASSA DAL TUNNEL", "ЧТО ИДЁТ ЧЕРЕЗ ТУННЕЛЬ"))
+                SectionLabel(tr(lang, "CONFIGURAZIONE SENZA CHIAVI", "НАСТРОЙКА БЕЗ КЛЮЧЕЙ"))
                 MonoText(
                     tr(
                         lang,
-                        "Per ora: la chat e le foto IA di Jolie. Il tunnel per tutto il telefono (YouTube, Instagram…) con la scelta delle app arriva col prossimo passo.",
-                        "Пока: чат и ИИ-фото Джоли. Туннель для всего телефона (YouTube, Instagram…) с выбором приложений появится на следующем шаге."
+                        "Copia il codice e mandalo in privato all’altro telefono: lì basta incollarlo. Contiene la chiave IA, non pubblicarlo.",
+                        "Скопируйте код и отправьте его лично на другой телефон: там достаточно вставить. В коде ключ ИИ, не публикуйте его."
                     ),
-                    size = 12
+                    size = 11
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallButton(tr(lang, "COPIA CODICE", "КОПИРОВАТЬ КОД"), {
+                        copyText(context, ConfigCode.export(context))
+                        cfgStatus = tr(lang, "Codice copiato.", "Код скопирован.")
+                    }, primary = true)
+                    SmallButton(tr(lang, "INCOLLA CODICE", "ВСТАВИТЬ КОД"), {
+                        cfgStatus = if (ConfigCode.importCode(context, pasteText(context))) {
+                            tr(lang, "Configurazione importata.", "Настройка импортирована.")
+                        } else {
+                            tr(lang, "Negli appunti non c’è un codice Jolie.", "В буфере нет кода Джоли.")
+                        }
+                    })
+                }
+                if (cfgStatus.isNotEmpty()) MonoText(cfgStatus, size = 11, color = JolieColors.RedSoft)
             }
         }
 
