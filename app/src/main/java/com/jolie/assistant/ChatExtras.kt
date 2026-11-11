@@ -123,6 +123,7 @@ private fun RemoteImage(url: String) {
 /** Fila de fotos bajo un mensaje de Jolie (si el mensaje las tiene). */
 @Composable
 fun ChatImageStrip(text: String) {
+    ChatMapStrip(text)
     val urls = ChatImages.byText[text] ?: return
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
@@ -151,6 +152,7 @@ object ChatExtras {
         if (cal.isNotEmpty()) {
             sb.append("Calendario dell’utente nei prossimi 7 giorni (usalo per rispondere a domande su agenda e impegni):\n").append(cal)
         }
+        sb.append(ChatMaps.systemExtra(context))
         return sb.toString()
     }
 
