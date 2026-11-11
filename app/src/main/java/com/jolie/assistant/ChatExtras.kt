@@ -156,7 +156,7 @@ object ChatExtras {
 
     /** Quita las órdenes ocultas del texto, crea el evento y lanza la búsqueda de fotos. */
     fun process(context: Context, text: String): String {
-        var out = text
+        var out = ChatMaps.handle(context, text) 
         val cal = CAL_RE.find(out)
         if (cal != null) {
             out = out.replace(cal.value, "").trim()
