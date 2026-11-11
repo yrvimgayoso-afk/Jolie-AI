@@ -89,7 +89,7 @@ object JolieProxy {
     }
 
     fun toggle(context: Context, language: String) {
-        if (state == State.OFF || state == State.ERROR) start(context, language) else stop()
+        if (state == State.OFF || state == State.ERROR) VpnTun.ensurePermission(context) { start(context, language) } else stop()
     }
 
     fun start(context: Context, language: String) {
@@ -110,7 +110,7 @@ object JolieProxy {
         state = State.OFF
         message = ""
         nodeName = ""
-        runAsync { XrayEngine.stop() }
+        runAsync { XrayEngine.stop(); VpnTun.close() }
     }
 
     private fun ui(gen: Int, block: () -> Unit) {
@@ -218,6 +218,7 @@ object JolieProxy {
             }
             sleep(900, gen)
             if (gen == generation && verify()) {
+                VpnTun.upgrade(app, n.link) { addLog(gen, it) }
                 routing = true
                 addLog(gen, "OK: " + n.name.take(30))
                 ui(gen) {
