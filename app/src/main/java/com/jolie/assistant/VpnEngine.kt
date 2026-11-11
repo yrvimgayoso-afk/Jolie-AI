@@ -172,7 +172,7 @@ fun buildXrayConfig(link: String): String? {
         .put("sniffing", JSONObject().put("enabled", true).put("destOverride", JSONArray().put("http").put("tls")))
     val cfg = JSONObject()
         .put("log", JSONObject().put("loglevel", "warning"))
-        .put("inbounds", JSONArray().put(inbound))
+        .put("inbounds", TunState.inbounds(inbound)
         .put("outbounds", JSONArray().put(out).put(JSONObject().put("tag", "direct").put("protocol", "freedom")))
         .put("dns", JSONObject().put("servers", JSONArray().put("1.1.1.1").put("8.8.8.8")))
     return cfg.toString()
@@ -248,7 +248,7 @@ object XrayEngine {
             if (types.size == 1) {
                 startM.invoke(ctl, config)
             } else if (types.size == 2) {
-            if (types[1] == java.lang.Long.TYPE) startM.invoke(ctl, config, 0L) else startM.invoke(ctl, config, 0)
+            if (types[1] == java.lang.Long.TYPE) startM.invoke(ctl, config, TunState.fd.toLong()) else startM.invoke(ctl, config, TunState.fd)
             } else {
                 throw IllegalStateException("startLoop con " + types.size + " parametri")
             }
