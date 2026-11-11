@@ -48,23 +48,6 @@ private fun isChatModel(n: String): Boolean {
     return bad.none { n.contains(it) }
 }
 
-/** Più basso = provato prima: i modelli "lite" stabili sono i meno affollati. */
-private fun modelRank(n: String): Int {
-    val lite = n.contains("lite")
-    val flash = n.contains("flash")
-    val pro = n.contains("pro")
-    val preview = n.contains("preview") || n.contains("exp")
-    return when {
-        lite && !preview -> 0
-        flash && !preview && !n.endsWith("-latest") -> 1
-        lite -> 2
-        flash && !preview -> 3
-        flash -> 4
-        pro -> 6
-        else -> 8
-    }
-}
-
 /** Chiede a Google quali modelli esistono davvero per questa chiave (cache di 6 ore). */
 private fun listChatModels(app: Context, apiKey: String): List<String> {
     val sp = app.getSharedPreferences("jolie_ai", Context.MODE_PRIVATE)
@@ -101,7 +84,7 @@ private fun listChatModels(app: Context, apiKey: String): List<String> {
     }
 }
 
-/** Ordine dei modelli: l'ultimo che ha funzionato, poi quelli esistenti dal meno al più affollato. */
+/** Ordine dei modelli: l'ultimo che ha funzionato, poi i migliori (con ragionamento) e per ultimi i "lite". */
 private fun modelChain(app: Context, apiKey: String, primary: String): List<String> {
     val sp = app.getSharedPreferences("jolie_ai", Context.MODE_PRIVATE)
     val lastOk = sp.getString("last_ok", "") ?: ""
@@ -110,12 +93,12 @@ private fun modelChain(app: Context, apiKey: String, primary: String): List<Stri
     if (available.isEmpty()) {
         if (lastOk.isNotEmpty()) out.add(lastOk)
         if (primary.isNotEmpty() && primary != AiPrefs.DEFAULT_MODEL) out.add(primary)
-        out.add("gemini-flash-lite-latest")
         out.add(AiPrefs.DEFAULT_MODEL)
+        out.add("gemini-flash-lite-latest")
     } else {
         if (lastOk.isNotEmpty() && available.contains(lastOk)) out.add(lastOk)
         if (primary.isNotEmpty() && primary != AiPrefs.DEFAULT_MODEL && available.contains(primary)) out.add(primary)
-        out.addAll(available.sortedWith(compareBy<String>({ modelRank(it) }, { it })))
+        out.addAll(available.sortedWith(compareBy<String> { strongRank(it) }.thenByDescending { it }))
     }
     return out.distinct().take(4)
 }
@@ -146,7 +129,7 @@ fun askGemini(
     val app = context.applicationContext
     Thread {
         val result = runCatching {
-            val systemText = systemText + ChatExtras.systemExtra(app)
+            val sys = systemText + ChatExtras.systemExtra(app)
             val deadline = System.currentTimeMillis() + 50000
             val chain = modelChain(app, apiKey, model.trim())
             val attempts = ArrayList<String>()
@@ -157,7 +140,7 @@ fun askGemini(
                     if (remaining < 4000) break
                     try {
                         val reply = callGemini(
-                            app, apiKey, m, systemText, history, userText, attachment, minOf(remaining, 20000)
+                            app, apiKey, m, sys, history, userText, attachment, minOf(remaining, 20000)
                         )
                         app.getSharedPreferences("jolie_ai", Context.MODE_PRIVATE)
                             .edit().putString("last_ok", m).apply()
