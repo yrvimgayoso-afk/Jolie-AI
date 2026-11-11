@@ -16,23 +16,19 @@ import java.net.URL
 import java.nio.FloatBuffer
 
 /**
- * IA anime GRATUITA que se ejecuta en el propio teléfono (AnimeGANv2, estilo Hayao Miyazaki).
+ * IA anime GRATUITA que se ejecuta en el propio teléfono (AnimeGANv2).
  * Descarga el modelo (unos 8 MB) la primera vez; luego funciona sin internet, también en Moscú.
  */
 object AnimeAi {
     @Volatile
     var lastError = ""
 
-    private const val MODEL_FILE = "AnimeGANv2_Paprika.onnx", y debajo de private val URLS = listOf(
-        
-        private val URLS = listOf(
+    private const val MODEL_FILE = "AnimeGANv2_Paprika.onnx"
+    private val URLS = listOf(
         "https://huggingface.co/vumichien/AnimeGANv2_Paprika/resolve/main/AnimeGANv2_Paprika.onnx",
         "https://huggingface.co/vumichien/AnimeGANv2_Hayao/resolve/main/AnimeGANv2_Hayao.onnx",
         "https://hf-mirror.com/vumichien/AnimeGANv2_Hayao/resolve/main/AnimeGANv2_Hayao.onnx",
-        "https://huggingface.co/frankminors123/AnimeGAN_Hayao_Style_ONNX/resolve/main/generator_hayao.onnx",
-        "https://github.com/TachibanaYoshino/AnimeGANv2/raw/master/pb_and_onnx_model/AnimeGANv2_Hayao.onnx",
-        "https://cdn.jsdelivr.net/gh/TachibanaYoshino/AnimeGANv2@master/pb_and_onnx_model/AnimeGANv2_Hayao.onnx",
-        "https://raw.githubusercontent.com/TachibanaYoshino/AnimeGANv2/master/pb_and_onnx_model/AnimeGANv2_Hayao.onnx"
+        "https://huggingface.co/frankminors123/AnimeGAN_Hayao_Style_ONNX/resolve/main/generator_hayao.onnx"
     )
 
     private fun appContext(): Context? = try {
